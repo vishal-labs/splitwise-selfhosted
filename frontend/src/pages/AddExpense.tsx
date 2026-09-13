@@ -12,7 +12,6 @@ import { useMe } from "../App";
 import { Avatar } from "../components/Avatar";
 import { Button } from "../components/Button";
 import { Dialog } from "../components/Dialog";
-import { Input } from "../components/Input";
 import { Tabs } from "../components/Tabs";
 
 // ponytail: backend has no GET /api/rates router yet (services/rates.py exists, no endpoint) — static list until it does
@@ -42,10 +41,6 @@ const chipClasses = (active: boolean) =>
 
 const inlineSelect =
   "cursor-pointer rounded-lg border-0 bg-transparent px-1 font-medium hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring";
-
-// ponytail: hero-style borderless input — same language as the amount field
-const heroInput =
-  "h-10 w-full border-0 border-b border-border bg-transparent text-right text-sm tabular-nums text-fg placeholder:text-muted-fg/60 focus-visible:border-primary focus-visible:outline-none";
 
 const chipless =
   "inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border-0 bg-transparent px-3 text-sm text-muted-fg hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring";
@@ -299,49 +294,56 @@ export default function AddExpense({
             </label>
           </div>
 
-          <div className="grid gap-1.5 text-sm">
+          <div className="grid gap-2 text-sm">
             <span className="text-muted-fg">Split</span>
-            <Tabs tabs={MODES.map((m) => ({ id: m.id, label: m.label }))} value={mode} onChange={(id) => setMode(id as Mode)} />
+            <Tabs pills tabs={MODES.map((m) => ({ id: m.id, label: m.label }))} value={mode} onChange={(id) => setMode(id as Mode)} />
             {mode === "equal" ? (
-              <ul className="grid gap-1">
+              <div className="flex flex-wrap gap-1.5">
                 {members.map((m) => (
-                  <li key={m.id} className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={includeSet.has(m.id)}
-                      onChange={() => {
-                        const next = new Set(includeSet);
-                        if (next.has(m.id)) next.delete(m.id);
-                        else next.add(m.id);
-                        setIncluded(next);
-                      }}
-                      className="h-4 w-4 accent-primary"
-                      id={`inc-${m.id}`}
-                    />
-                    <label htmlFor={`inc-${m.id}`} className="cursor-pointer">
-                      {m.id === me?.id ? "You" : m.name}
-                    </label>
-                  </li>
+                  <button
+                    key={m.id}
+                    type="button"
+                    aria-pressed={includeSet.has(m.id)}
+                    onClick={() => {
+                      const next = new Set(includeSet);
+                      if (next.has(m.id)) next.delete(m.id);
+                      else next.add(m.id);
+                      setIncluded(next);
+                    }}
+                    className={`inline-flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border px-3 transition-colors focus-visible:outline-2 focus-visible:outline-ring ${
+                      includeSet.has(m.id)
+                        ? "border-primary bg-primary text-primary-fg"
+                        : "border-border bg-card text-fg hover:bg-muted"
+                    }`}
+                  >
+                    <Avatar name={m.name} size={20} />
+                    {m.id === me?.id ? "You" : m.name}
+                  </button>
                 ))}
-              </ul>
+              </div>
             ) : (
-              <ul className="grid gap-2">
+              <ul className="grid gap-1.5">
                 {members.map((m) => (
-                  <li key={m.id} className="flex items-center gap-2">
-                    <span className="w-28 shrink-0 truncate text-sm text-muted-fg">
+                  <li key={m.id} className="flex items-center gap-2.5 rounded-lg border border-border bg-card px-3 py-1.5">
+                    <Avatar name={m.name} size={22} />
+                    <span className="min-w-0 flex-1 truncate">
                       {m.id === me?.id ? "You" : m.name}
                     </span>
-                    <Input
+                    <input
                       type="number"
                       step={mode === "shares" ? "1" : "0.01"}
                       min="0"
                       inputMode="decimal"
                       autoComplete="off"
-                      placeholder={mode === "amounts" ? "0.00" : mode === "percent" ? "% of total" : "shares"}
+                      aria-label={`${m.id === me?.id ? "Your" : `${m.name}'s`} ${mode === "amounts" ? "amount" : mode === "percent" ? "percentage" : "shares"}`}
+                      placeholder={mode === "amounts" ? "0.00" : mode === "percent" ? "0" : "0"}
                       value={values[m.id] ?? ""}
                       onChange={(e) => setValue(m.id, e.target.value)}
-                      className={heroInput}
+                      className="h-8 w-20 shrink-0 border-0 bg-transparent text-right tabular-nums text-fg placeholder:text-muted-fg/60 focus-visible:outline-none"
                     />
+                    <span className="w-12 shrink-0 text-right text-xs text-muted-fg">
+                      {mode === "amounts" ? currency : mode === "percent" ? "%" : "share(s)"}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -351,7 +353,7 @@ export default function AddExpense({
                 Splits are computed on the amount converted to {groupCurrency}; the backend validates the sum.
               </p>
             )}
-            {h && <p className="text-xs text-muted-fg">{h}</p>}
+            {h && <p className="text-center text-xs text-muted-fg">{h}</p>}
           </div>
 
           <div className="grid gap-2">
