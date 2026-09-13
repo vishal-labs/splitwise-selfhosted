@@ -108,6 +108,17 @@ dialog.expense-modal[open]::backdrop {
   appearance: textfield;
 }
 
+/* hide spinners on all numeric expense inputs (amounts, percent, shares) */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
 /* Customizable <select> (Chrome/Edge 135+): styled menu matching the app tokens.
    Firefox/Safari degrade to the native dropdown with the trigger styles below. */
 .menu-select,

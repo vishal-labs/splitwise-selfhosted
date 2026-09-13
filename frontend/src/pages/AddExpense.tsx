@@ -298,7 +298,7 @@ export default function AddExpense({
             <span className="text-muted-fg">Split</span>
             <Tabs pills tabs={MODES.map((m) => ({ id: m.id, label: m.label }))} value={mode} onChange={(id) => setMode(id as Mode)} />
             {mode === "equal" ? (
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap justify-center gap-1.5">
                 {members.map((m) => (
                   <button
                     key={m.id}
