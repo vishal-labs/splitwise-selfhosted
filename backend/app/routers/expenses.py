@@ -1,7 +1,7 @@
 import datetime as dt
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.activity import log_activity
@@ -196,10 +196,7 @@ async def delete_expense(
         raise HTTPException(status.HTTP_404_NOT_FOUND)
     if expense.created_by != user.id and membership.role != "admin":
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Only creator or admin can delete")
-    for s in (
-        await db.scalars(select(ExpenseSplit).where(ExpenseSplit.expense_id == expense.id))
-    ):
-        await db.delete(s)
+    await db.execute(delete(ExpenseSplit).where(ExpenseSplit.expense_id == expense.id))
     await db.delete(expense)
     await log_activity(
         db, expense.group_id, user.id, "expense_deleted", target_id=expense_id

@@ -94,6 +94,6 @@ class ExpenseOut(BaseModel):
 
 
 class DebtOut(BaseModel):
-    from_user: int
-    to_user: int
-    amount_minor: int
+    from_user: int = Field(serialization_alias="from")
+    to_user: int = Field(serialization_alias="to")
+    amount_minor: int = Field(serialization_alias="amount")
