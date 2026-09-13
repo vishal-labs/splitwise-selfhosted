@@ -1,3 +1,6 @@
+from datetime import date as Date
+from typing import Literal
+
 from pydantic import BaseModel, EmailStr, Field
 
 from app.models import User
@@ -52,3 +55,45 @@ class GroupDetail(GroupOut):
 
 class MemberAdd(BaseModel):
     email: EmailStr
+
+
+class SplitInput(BaseModel):
+    user_id: int
+    mode: Literal["equal", "amounts", "percent", "shares"]
+    value: float | None = None
+
+
+class ExpenseCreate(BaseModel):
+    description: str = Field(min_length=1, max_length=500)
+    amount_minor: int = Field(gt=0)
+    currency: str = Field(min_length=3, max_length=3)
+    payer_id: int
+    splits: list[SplitInput] = Field(min_length=1)
+    date: Date | None = None
+    category: str | None = None
+
+
+class SplitOut(BaseModel):
+    user_id: int
+    amount_minor: int
+
+
+class ExpenseOut(BaseModel):
+    id: int
+    group_id: int
+    created_by: int
+    payer_id: int
+    description: str
+    amount_minor: int
+    currency: str
+    converted_amount_minor: int | None
+    rate: float | None
+    date: Date
+    category: str | None
+    splits: list[SplitOut]
+
+
+class DebtOut(BaseModel):
+    from_user: int
+    to_user: int
+    amount_minor: int
