@@ -204,11 +204,19 @@ function ExpenseDetail({
 
         <div className="grid gap-1 text-sm">
           <h3 className="font-medium">Splits</h3>
-          <ul className="grid gap-1">
+          <ul className="grid gap-1.5">
             {expense.splits.map((s) => (
-              <li key={s.user_id} className="flex justify-between">
-                <span>{memberName(members, s.user_id)}</span>
-                <span>{formatMinor(s.amount_minor, expense.currency)}</span>
+              <li
+                key={s.user_id}
+                className="flex items-center gap-2.5 rounded-lg border border-border bg-card px-3 py-1.5"
+              >
+                <Avatar name={memberName(members, s.user_id)} size={22} />
+                <span className="min-w-0 flex-1 truncate">
+                  {memberName(members, s.user_id)}
+                </span>
+                <span className="shrink-0 text-right font-medium tabular-nums">
+                  {formatMinor(s.amount_minor, expense.currency)}
+                </span>
               </li>
             ))}
           </ul>
@@ -345,6 +353,7 @@ function SettleUpDialog({
   const { data: me } = useMe();
   const queryClient = useQueryClient();
   const [error, setError] = useState("");
+  const [payeeId, setPayeeId] = useState<number | null>(null);
 
   const settle = useMutation({
     mutationFn: (body: { payer_id: number; payee_id: number; amount_minor: number }) =>
@@ -366,7 +375,7 @@ function SettleUpDialog({
     }
     settle.mutate({
       payer_id: Number(data.get("payer_id")),
-      payee_id: Number(data.get("payee_id")),
+      payee_id: payeeId ?? 0,
       amount_minor: amountMinor,
     });
   }
@@ -374,34 +383,35 @@ function SettleUpDialog({
   return (
     <Dialog open onClose={onClose} title="Settle up">
       <form onSubmit={onSubmit} className="grid gap-4">
-        <label className="grid gap-1.5 text-sm">
-          Payer <span className="text-muted-fg">(you)</span>
-          {/* payer is fixed to the logged-in user */}
-          <input type="hidden" name="payer_id" value={me?.id ?? ""} />
-          <input
-            className="h-10 rounded-lg border border-border bg-muted px-3 text-muted-fg"
-            value={me ? "You" : ""}
-            readOnly
-            aria-label="Payer"
-          />
-        </label>
-        <label className="grid gap-1.5 text-sm">
-          Payee
-          <select
-            name="payee_id"
-            defaultValue={initial && initial.from === me?.id ? initial.to : group?.members.find((m) => m.id !== me?.id)?.id}
-            className="h-10 rounded-lg border border-border bg-card px-3 focus-visible:outline-2 focus-visible:outline-ring"
-            required
-          >
-            {group?.members
-              .filter((m) => m.id !== me?.id)
-              .map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
-                </option>
-              ))}
-          </select>
-        </label>
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-sm text-muted-fg">
+          <label className="flex items-center gap-1.5">
+            <span className="text-muted-fg">Paid by</span>
+            <Avatar name={me?.name ?? ""} size={22} />
+            <span className="font-medium text-fg">You</span>
+            <input type="hidden" name="payer_id" value={me?.id ?? ""} />
+          </label>
+          <label className="flex items-center gap-1.5">
+            <span className="text-muted-fg">To</span>
+            <select
+              name="payee_id"
+              value={payeeId ?? (initial && initial.from === me?.id ? initial.to : group?.members.find((m) => m.id !== me?.id)?.id) ?? ""}
+              onChange={(e) => setPayeeId(Number(e.target.value))}
+              className="menu-select h-9 text-sm"
+              required
+            >
+              <button>
+                <selectedcontent />
+              </button>
+              {group?.members
+                .filter((m) => m.id !== me?.id)
+                .map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+        </div>
         <label className="grid gap-1.5 text-sm">
           Amount ({currency})
           <Input name="amount" type="number" step="0.01" min="0.01" inputMode="decimal" autoComplete="off" required defaultValue={initial ? (initial.amount / 100).toFixed(2) : undefined} />
@@ -596,8 +606,9 @@ export default function GroupDetail() {
         ))}
       </div>
 
-      <div className="mt-6">
+      <div className="mt-6 flex justify-center">
         <Tabs
+          pills
           tabs={[
             { id: "expenses", label: "Expenses" },
             { id: "balances", label: "Balances" },
