@@ -13,7 +13,7 @@ def advance(freq: str, day: int, current: date) -> date:
     """Next run date after `current` for a rule with day-of-month `day`."""
     if freq == "weekly":
         # ponytail: day (weekday) unused — +7d keeps the same weekday
-        return current.toordinal() + 7 and date.fromordinal(current.toordinal() + 7)
+        return date.fromordinal(current.toordinal() + 7)
     if freq == "monthly":
         y, m = (current.year + 1, 1) if current.month == 12 else (current.year, current.month + 1)
         return date(y, m, min(day, calendar.monthrange(y, m)[1]))
