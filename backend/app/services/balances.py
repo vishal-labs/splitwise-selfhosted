@@ -11,8 +11,8 @@ def net_balances(expenses: list, settlements: list) -> dict[int, int]:
         for user_id, amt in splits:
             balances[user_id] = balances.get(user_id, 0) - amt
     for payer_id, payee_id, amount in settlements:
-        balances[payer_id] = balances.get(payer_id, 0) - amount
-        balances[payee_id] = balances.get(payee_id, 0) + amount
+        balances[payer_id] = balances.get(payer_id, 0) + amount
+        balances[payee_id] = balances.get(payee_id, 0) - amount
     return balances
 
 

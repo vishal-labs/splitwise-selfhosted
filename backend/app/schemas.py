@@ -93,6 +93,24 @@ class ExpenseOut(BaseModel):
     splits: list[SplitOut]
 
 
+class SettlementCreate(BaseModel):
+    payer_id: int
+    payee_id: int
+    amount_minor: int = Field(gt=0)
+    currency: str = Field(min_length=3, max_length=3)
+
+
+class SettlementOut(BaseModel):
+    id: int
+    group_id: int
+    payer_id: int
+    payee_id: int
+    amount_minor: int
+    currency: str
+    rate: float | None
+    date: Date
+
+
 class DebtOut(BaseModel):
     from_user: int = Field(serialization_alias="from")
     to_user: int = Field(serialization_alias="to")

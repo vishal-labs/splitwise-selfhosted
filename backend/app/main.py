@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.db import init
-from app.routers import expenses, groups, users
+from app.routers import expenses, groups, settlements, users
 
 
 @asynccontextmanager
@@ -26,6 +26,7 @@ def create_app() -> FastAPI:
     app.include_router(users.router)
     app.include_router(groups.router)
     app.include_router(expenses.router)
+    app.include_router(settlements.router)
 
     @app.get("/api/health")
     async def health():
