@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.activity import log_activity
 from app.auth import get_current_user, get_db
-from app.models import Expense, ExpenseSplit, Membership, RecurringRule, Settlement, User
+from app.models import Expense, ExpenseSplit, Group, Membership, RecurringRule, Settlement, User
 from app.routers.groups import get_group_member
 from app.schemas import DebtOut, ExpenseCreate, ExpenseOut, SplitOut
 from app.services.balances import net_balances, simplify_debts
@@ -185,6 +185,82 @@ async def get_debts(
     return [
         DebtOut(from_user=f, to_user=t, amount_minor=a) for f, t, a in simplify_debts(balances)
     ]
+
+
+@router.patch("/expenses/{expense_id}", response_model=ExpenseOut)
+async def edit_expense(
+    expense_id: int,
+    payload: ExpenseCreate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    expense = await db.get(Expense, expense_id)
+    if expense is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND)
+    membership = (
+        await db.execute(
+            select(Membership).where(
+                Membership.group_id == expense.group_id,
+                Membership.user_id == user.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if membership is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND)
+    if expense.created_by != user.id and membership.role != "admin":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only creator or admin can edit")
+    group = await db.get(Group, expense.group_id)
+
+    ids = [s.user_id for s in payload.splits]
+    if len(set(ids)) != len(ids):
+        raise HTTPException(422, "Duplicate split users")
+    member_ids = set(
+        await db.scalars(
+            select(Membership.user_id).where(Membership.group_id == expense.group_id)
+        )
+    )
+    if payload.payer_id not in member_ids:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Payer is not a member")
+    missing = [uid for uid in ids if uid not in member_ids]
+    if missing:
+        raise HTTPException(422, "Split users must be group members")
+
+    currency = payload.currency.upper()
+    rate = None
+    converted = payload.amount_minor
+    if currency != group.currency:
+        rate = await get_rate(db, currency, group.currency)
+        converted = convert(payload.amount_minor, rate)
+
+    amounts = _split_amounts(converted, payload.splits)
+    # ponytail: bulk core delete so child rows go before parent in unit of work
+    await db.execute(delete(ExpenseSplit).where(ExpenseSplit.expense_id == expense.id))
+    expense.payer_id = payload.payer_id
+    expense.description = payload.description
+    expense.amount_minor = payload.amount_minor
+    expense.currency = currency
+    expense.converted_amount_minor = converted if rate else None
+    expense.rate = rate
+    expense.date = payload.date or expense.date
+    expense.category = payload.category
+    for s, amt in zip(payload.splits, amounts):
+        db.add(ExpenseSplit(expense_id=expense.id, user_id=s.user_id, amount_minor=amt))
+    await log_activity(db, expense.group_id, user.id, "expense_updated", target_id=expense.id)
+    await db.commit()
+    return ExpenseOut(
+        id=expense.id,
+        group_id=expense.group_id,
+        created_by=expense.created_by,
+        payer_id=expense.payer_id,
+        description=expense.description,
+        amount_minor=expense.amount_minor,
+        currency=expense.currency,
+        converted_amount_minor=expense.converted_amount_minor,
+        rate=expense.rate,
+        date=expense.date,
+        category=expense.category,
+        splits=[SplitOut(user_id=s.user_id, amount_minor=a) for s, a in zip(payload.splits, amounts)],
+    )
 
 
 @router.delete("/expenses/{expense_id}")

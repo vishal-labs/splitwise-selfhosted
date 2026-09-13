@@ -264,6 +264,104 @@ async def test_delete_expense_permissions_and_recompute(client):
     assert r.json() == []
 
 
+async def test_edit_expense_permissions_and_recompute(client):
+    group_id, a, b, token_b = await _setup_group(client)
+    token_a = client.cookies.get("session")
+    await _switch(client, token_b)
+    r = await client.post(
+        f"/api/groups/{group_id}/expenses",
+        json={
+            "description": "Bs expense",
+            "amount_minor": 1000,
+            "currency": "USD",
+            "payer_id": b,
+            "splits": [
+                {"user_id": a, "mode": "equal", "value": None},
+                {"user_id": b, "mode": "equal", "value": None},
+            ],
+        },
+    )
+    expense_id = r.json()["id"]
+
+    # non-creator non-admin cannot edit
+    token_c = await _register(client, "c@b.com")
+    await _switch(client, token_a)
+    await client.post(f"/api/groups/{group_id}/members", json={"email": "c@b.com"})
+    await _switch(client, token_c)
+    r = await client.patch(
+        f"/api/expenses/{expense_id}",
+        json={
+            "description": "Hacked",
+            "amount_minor": 2000,
+            "currency": "USD",
+            "payer_id": b,
+            "splits": [
+                {"user_id": a, "mode": "equal", "value": None},
+                {"user_id": b, "mode": "equal", "value": None},
+            ],
+        },
+    )
+    assert r.status_code == 403
+
+    # non-member cannot edit (404, not 403)
+    token_d = await _register(client, "d@b.com")
+    await _switch(client, token_d)
+    r = await client.patch(
+        f"/api/expenses/{expense_id}",
+        json={
+            "description": "X",
+            "amount_minor": 2000,
+            "currency": "USD",
+            "payer_id": b,
+            "splits": [{"user_id": b, "mode": "equal", "value": None}],
+        },
+    )
+    assert r.status_code == 404
+
+    # bad percent sum rejected
+    await _switch(client, token_b)
+    r = await client.patch(
+        f"/api/expenses/{expense_id}",
+        json={
+            "description": "Bs expense",
+            "amount_minor": 2000,
+            "currency": "USD",
+            "payer_id": b,
+            "splits": [
+                {"user_id": a, "mode": "percent", "value": 60},
+                {"user_id": b, "mode": "percent", "value": 30},
+            ],
+        },
+    )
+    assert r.status_code == 422
+
+    # creator edits amount 1000 -> 2000; debts recompute
+    r = await client.patch(
+        f"/api/expenses/{expense_id}",
+        json={
+            "description": "Bs expense (edited)",
+            "amount_minor": 2000,
+            "currency": "USD",
+            "payer_id": b,
+            "splits": [
+                {"user_id": a, "mode": "equal", "value": None},
+                {"user_id": b, "mode": "equal", "value": None},
+            ],
+        },
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["amount_minor"] == 2000
+    assert body["description"] == "Bs expense (edited)"
+    amounts = {s["user_id"]: s["amount_minor"] for s in body["splits"]}
+    assert amounts == {a: 1000, b: 1000}
+
+    r = await client.get(f"/api/groups/{group_id}/debts")
+    debts = r.json()
+    assert len(debts) == 1
+    assert debts[0] == {"from": a, "to": b, "amount": 1000}
+
+
 async def test_activity_logged_on_expense(client):
     from sqlalchemy import select
 
