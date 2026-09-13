@@ -5,6 +5,8 @@ import { Avatar } from "./components/Avatar";
 import { Button } from "./components/Button";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import Dashboard from "./pages/Dashboard";
+import GroupDetail from "./pages/GroupDetail";
 
 /** Current session query. */
 export function useMe() {
@@ -113,8 +115,8 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route element={<RequireAuth />}>
-        <Route path="/" element={<Placeholder name="Dashboard" />} />
-        <Route path="/groups/:id" element={<Placeholder name="Group" />} />
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/groups/:id" element={<GroupDetail />} />
         <Route path="/activity" element={<Placeholder name="Activity" />} />
         <Route path="/analytics" element={<Placeholder name="Analytics" />} />
         <Route path="/settings" element={<Placeholder name="Settings" />} />
