@@ -265,8 +265,11 @@ export default function AddExpense({
                 aria-label="Category"
                 value={category ?? ""}
                 onChange={(e) => setCategory(e.target.value || null)}
-                className={`${inlineSelect} h-9 text-sm`}
+                className={`${inlineSelect} menu-select h-9 text-sm`}
               >
+                <button>
+                  <selectedcontent />
+                </button>
                 <option value="">None</option>
                 {CATEGORIES.map((c) => (
                   <option key={c} value={c}>
@@ -282,8 +285,11 @@ export default function AddExpense({
                 aria-label="Paid by"
                 value={payer}
                 onChange={(e) => setPayerId(Number(e.target.value))}
-                className={`${inlineSelect} h-9 text-sm`}
+                className={`${inlineSelect} menu-select h-9 text-sm`}
               >
+                <button>
+                  <selectedcontent />
+                </button>
                 {members.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.id === me?.id ? "You" : m.name}

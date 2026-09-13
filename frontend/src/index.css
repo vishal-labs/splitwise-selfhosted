@@ -107,3 +107,52 @@ dialog.expense-modal[open]::backdrop {
 .amount-input {
   appearance: textfield;
 }
+
+/* Customizable <select> (Chrome/Edge 135+): styled menu matching the app tokens.
+   Firefox/Safari degrade to the native dropdown with the trigger styles below. */
+.menu-select,
+.menu-select::picker(select) {
+  appearance: base-select;
+}
+.menu-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  cursor: pointer;
+  border: 0;
+  background: transparent;
+  border-radius: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  font-weight: 500;
+  color: var(--fg);
+}
+.menu-select:hover,
+.menu-select:focus-visible {
+  background: var(--muted);
+}
+.menu-select::picker(select) {
+  margin-top: 0.25rem;
+  background: var(--card);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 0.25rem;
+  box-shadow: 0 8px 24px oklch(0 0 0 / 0.15);
+}
+.menu-select::picker-icon {
+  color: var(--muted-fg);
+  margin-inline-start: 0.25rem;
+}
+.menu-select option {
+  cursor: pointer;
+  border-radius: 0.5rem;
+  padding: 0.375rem 0.625rem;
+  color: var(--fg);
+}
+.menu-select option:hover,
+.menu-select option:focus {
+  background: var(--muted);
+}
+.menu-select option::checkmark {
+  color: var(--primary);
+}
