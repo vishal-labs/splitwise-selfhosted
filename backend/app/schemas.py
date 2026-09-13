@@ -64,6 +64,11 @@ class SplitInput(BaseModel):
     value: float | None = None
 
 
+class RecurringInput(BaseModel):
+    freq: Literal["weekly", "monthly", "yearly"]
+    day: int = Field(ge=1, le=31)
+
+
 class ExpenseCreate(BaseModel):
     description: str = Field(min_length=1, max_length=500)
     amount_minor: int = Field(gt=0)
@@ -72,6 +77,7 @@ class ExpenseCreate(BaseModel):
     splits: list[SplitInput] = Field(min_length=1)
     date: Date | None = None
     category: str | None = None
+    recurring: RecurringInput | None = None
 
 
 class SplitOut(BaseModel):

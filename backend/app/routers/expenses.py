@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.activity import log_activity
 from app.auth import get_current_user, get_db
-from app.models import Expense, ExpenseSplit, Membership, Settlement, User
+from app.models import Expense, ExpenseSplit, Membership, RecurringRule, Settlement, User
 from app.routers.groups import get_group_member
 from app.schemas import DebtOut, ExpenseCreate, ExpenseOut, SplitOut
 from app.services.balances import net_balances, simplify_debts
@@ -86,6 +86,18 @@ async def create_expense(
     await db.flush()
     for s, amt in zip(payload.splits, amounts):
         db.add(ExpenseSplit(expense_id=expense.id, user_id=s.user_id, amount_minor=amt))
+    if payload.recurring:
+        from app.services.recurring import advance
+
+        rule = RecurringRule(
+            group_id=group.id,
+            freq=payload.recurring.freq,
+            day=payload.recurring.day,
+            next_run=advance(payload.recurring.freq, payload.recurring.day, expense.date),
+        )
+        db.add(rule)
+        await db.flush()
+        expense.recurring_rule_id = rule.id
     await log_activity(db, group.id, user.id, "expense_added", target_id=expense.id)
     await db.commit()
     return ExpenseOut(

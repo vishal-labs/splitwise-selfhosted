@@ -2,12 +2,12 @@ import csv
 import datetime as dt
 import io
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_db
-from app.models import Expense, User
+from app.auth import get_current_user, get_db
+from app.models import Activity, Expense, Rate, User
 from app.routers.groups import get_group_member
 
 router = APIRouter(prefix="/api", tags=["analytics"])
@@ -95,3 +95,57 @@ async def export_csv(
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="group-{group.id}.csv"'},
     )
+
+
+@router.get("/groups/{group_id}/activity")
+async def group_activity(
+    group_id: int,
+    db: AsyncSession = Depends(get_db),
+    pair: tuple = Depends(get_group_member),
+):
+    rows = (
+        await db.scalars(
+            select(Activity)
+            .where(Activity.group_id == pair[0].id)
+            .order_by(Activity.created_at.desc(), Activity.id.desc())
+            .limit(100)
+        )
+    ).all()
+    users = {
+        u.id: u.name
+        for u in (await db.scalars(select(User))).all()
+    }
+    return [
+        {
+            "id": a.id,
+            "user_id": a.user_id,
+            "user_name": users.get(a.user_id, ""),
+            "verb": a.verb,
+            "target_id": a.target_id,
+            "created_at": a.created_at.isoformat() if a.created_at else None,
+        }
+        for a in rows
+    ]
+
+
+@router.get("/rates")
+async def list_rates(
+    base: str = "EUR",
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    from app.services import rates as rates_svc
+
+    try:
+        eur = await rates_svc._fetch_eur_rates()
+    except Exception:
+        eur = {r.quote: r.rate for r in (await db.scalars(select(Rate).where(Rate.base == "EUR"))).all()}
+        if not eur:
+            raise HTTPException(503, "Rates unavailable (offline?)")
+    b = base.upper()
+    if b == "EUR":
+        return {"base": "EUR", "rates": eur}
+    base_rate = eur.get(b)
+    if not base_rate:
+        raise HTTPException(422, f"Unknown currency {b}")
+    return {"base": b, "rates": {q: r / base_rate for q, r in eur.items()}}

@@ -212,3 +212,23 @@ async def test_comments_non_member_404(client):
     assert r.status_code == 404
     r = await client.get(f"/api/expenses/{exp_id}/comments")
     assert r.status_code == 404
+
+
+async def test_activity_endpoint(client):
+    group_id, a, b, _ = await _setup_group(client)
+    r = await client.get(f"/api/groups/{group_id}/activity")
+    assert r.status_code == 200
+    rows = r.json()
+    assert len(rows) >= 2  # created_group + joined
+    assert rows[0]["user_name"]
+
+
+async def test_rates_endpoint(client):
+    await _register(client, "a@b.com")
+    r = await client.get("/api/rates?base=USD")
+    if r.status_code == 503:
+        return  # offline test env
+    assert r.status_code == 200
+    body = r.json()
+    assert body["base"] == "USD"
+    assert body["rates"]["EUR"] > 0
