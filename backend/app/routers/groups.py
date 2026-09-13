@@ -1,12 +1,22 @@
 import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.activity import log_activity
 from app.auth import get_current_user, get_db
-from app.models import Group, Membership, User
+from app.models import (
+    Activity,
+    Comment,
+    Expense,
+    ExpenseSplit,
+    Group,
+    Membership,
+    RecurringRule,
+    Settlement,
+    User,
+)
 from app.schemas import GroupCreate, GroupDetail, GroupOut, MemberAdd, MemberOut
 from app.services.balances import group_net_balances
 
@@ -204,5 +214,34 @@ async def remove_member(
     await log_activity(
         db, group.id, user_id, "left" if user_id == me.user_id else "removed", target_id=user_id
     )
+    await db.commit()
+    return {"ok": True}
+
+
+@router.delete("/{group_id}")
+async def delete_group(
+    pair: tuple[Group, Membership] = Depends(get_group_member),
+    db: AsyncSession = Depends(get_db),
+):
+    group, _ = pair
+    if group.created_by != _.user_id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only the creator can delete the group")
+    # core deletes, FK-safe order: children of expenses first, expenses before rules
+    await db.execute(
+        delete(Comment).where(
+            Comment.expense_id.in_(select(Expense.id).where(Expense.group_id == group.id))
+        )
+    )
+    await db.execute(
+        delete(ExpenseSplit).where(
+            ExpenseSplit.expense_id.in_(select(Expense.id).where(Expense.group_id == group.id))
+        )
+    )
+    await db.execute(delete(Expense).where(Expense.group_id == group.id))
+    await db.execute(delete(RecurringRule).where(RecurringRule.group_id == group.id))
+    await db.execute(delete(Settlement).where(Settlement.group_id == group.id))
+    await db.execute(delete(Membership).where(Membership.group_id == group.id))
+    await db.execute(delete(Activity).where(Activity.group_id == group.id))
+    await db.execute(delete(Group).where(Group.id == group.id))
     await db.commit()
     return {"ok": True}

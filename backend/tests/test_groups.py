@@ -9,6 +9,7 @@ async def _register(client, email: str) -> str:
 
 
 async def _switch(client, token: str) -> None:
+    client.cookies.clear()  # register's Set-Cookie can leave a stale duplicate
     client.cookies.set("session", token)
 
 
@@ -206,6 +207,77 @@ async def test_activity_logged(client):
         )
     assert "created_group" in verbs
     assert "joined" in verbs
+
+
+async def test_delete_group(client):
+    from sqlalchemy import func, select
+
+    from app.db import SessionLocal
+    from app.models import Comment, Expense, ExpenseSplit, Group, Settlement
+
+    token_a = await _register(client, "a@b.com")
+    r = await client.post("/api/groups", json={"name": "Trip", "currency": "USD"})
+    group_id = r.json()["id"]
+    token_b = await _register(client, "b@b.com")
+    await _switch(client, token_a)
+    await client.post(f"/api/groups/{group_id}/members", json={"email": "b@b.com"})
+    r = await client.get(f"/api/groups/{group_id}")
+    members = {m["email"]: m["id"] for m in r.json()["members"]}
+    a, b = members["a@b.com"], members["b@b.com"]
+
+    r = await client.post(
+        f"/api/groups/{group_id}/expenses",
+        json={
+            "description": "Dinner",
+            "amount_minor": 1000,
+            "currency": "USD",
+            "payer_id": a,
+            "splits": [
+                {"user_id": a, "mode": "equal", "value": None},
+                {"user_id": b, "mode": "equal", "value": None},
+            ],
+        },
+    )
+    assert r.status_code == 200
+    expense_id = r.json()["id"]
+    r = await client.post(
+        f"/api/expenses/{expense_id}/comments", json={"body": "yum"}
+    )
+    assert r.status_code == 200
+    r = await client.post(
+        f"/api/groups/{group_id}/settlements",
+        json={"payer_id": b, "payee_id": a, "amount_minor": 500, "currency": "USD"},
+    )
+    assert r.status_code == 200
+
+    # non-creator member cannot delete
+    await _switch(client, token_b)
+    r = await client.delete(f"/api/groups/{group_id}")
+    assert r.status_code == 403
+
+    # non-member cannot delete
+    token_c = await _register(client, "c@b.com")
+    r = await client.delete(f"/api/groups/{group_id}")
+    assert r.status_code == 404
+
+    # creator deletes
+    await _switch(client, token_a)
+    r = await client.delete(f"/api/groups/{group_id}")
+    assert r.status_code == 200
+    assert r.json() == {"ok": True}
+
+    # group gone for former members
+    await _switch(client, token_b)
+    r = await client.get(f"/api/groups/{group_id}")
+    assert r.status_code == 404
+
+    # cascade really happened
+    async with SessionLocal() as db:
+        assert await db.scalar(select(func.count()).select_from(Group).where(Group.id == group_id)) == 0
+        assert await db.scalar(select(func.count()).select_from(Expense).where(Expense.group_id == group_id)) == 0
+        assert await db.scalar(select(func.count()).select_from(ExpenseSplit).where(ExpenseSplit.expense_id == expense_id)) == 0
+        assert await db.scalar(select(func.count()).select_from(Comment).where(Comment.expense_id == expense_id)) == 0
+        assert await db.scalar(select(func.count()).select_from(Settlement).where(Settlement.group_id == group_id)) == 0
 
 
 async def test_join_by_invite(client):
