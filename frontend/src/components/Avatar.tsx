@@ -1,11 +1,11 @@
-/** Avatar with initials; background hue derived from name for stable colors. */
+/** Avatar with initials; background picked from a fixed 6-color palette by name hash. */
 export function Avatar({ name, size = 32 }: { name: string; size?: number }) {
   const initials = name
     .split(/\s+/)
     .slice(0, 2)
     .map((w) => w[0]?.toUpperCase() ?? "")
     .join("");
-  const hue = [...name].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 0);
+  const color = ([...name].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 6, 0) + 6) % 6 + 1;
   return (
     <span
       aria-hidden="true"
@@ -14,7 +14,7 @@ export function Avatar({ name, size = 32 }: { name: string; size?: number }) {
         width: size,
         height: size,
         fontSize: size * 0.38,
-        background: `oklch(0.6 0.12 ${hue})`,
+        background: `var(--avatar-${color})`,
       }}
     >
       {initials || "?"}

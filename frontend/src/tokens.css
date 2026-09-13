@@ -22,6 +22,14 @@
   --positive: oklch(0.6 0.15 155);       /* green-500 */
   --negative: oklch(0.637 0.237 25);
   --ring: oklch(0.784 0.17 70);
+
+  /* avatar palette (hashed by name) */
+  --avatar-1: oklch(0.65 0.15 260); /* blue */
+  --avatar-2: oklch(0.6 0.15 155);  /* green */
+  --avatar-3: oklch(0.6 0.2 300);   /* purple */
+  --avatar-4: oklch(0.62 0.19 25);  /* red */
+  --avatar-5: oklch(0.72 0.14 70);  /* amber */
+  --avatar-6: oklch(0.63 0.19 340); /* pink */
 }
 
 @media (prefers-color-scheme: dark) {
@@ -42,5 +50,13 @@
     --positive: oklch(0.68 0.16 155);
     --negative: oklch(0.68 0.2 25);
     --ring: oklch(0.828 0.164 75);
+
+    /* avatar palette (hashed by name) */
+    --avatar-1: oklch(0.65 0.15 260);
+    --avatar-2: oklch(0.68 0.15 155);
+    --avatar-3: oklch(0.68 0.2 300);
+    --avatar-4: oklch(0.68 0.19 25);
+    --avatar-5: oklch(0.82 0.14 70);
+    --avatar-6: oklch(0.68 0.19 340);
   }
 }

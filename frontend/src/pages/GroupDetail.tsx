@@ -4,6 +4,7 @@ import { useParams } from "react-router";
 import {
   addComment,
   addMember,
+  cancelRecurring,
   createSettlement,
   deleteExpense,
   getComments,
@@ -47,6 +48,7 @@ function ExpenseRow({
 }) {
   const queryClient = useQueryClient();
   const [confirm, setConfirm] = useState(false);
+  const [ruleConfirm, setRuleConfirm] = useState(false);
   const [detail, setDetail] = useState(false);
   const groupId = expense.group_id;
 
@@ -56,6 +58,14 @@ function ExpenseRow({
       // route param is a string; keys must match useGroupExpenses/useGroupDebts or nothing refetches
       queryClient.invalidateQueries({ queryKey: ["expenses", String(groupId)] });
       queryClient.invalidateQueries({ queryKey: ["debts", String(groupId)] });
+    },
+  });
+
+  const cancelRule = useMutation({
+    mutationFn: () => cancelRecurring(groupId, expense.recurring_rule_id!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["expenses", String(groupId)] });
+      setRuleConfirm(false);
     },
   });
 
@@ -78,6 +88,37 @@ function ExpenseRow({
         </p>
       </button>
       <span className="font-medium">{formatMinor(total, expense.currency)}</span>
+      {expense.recurring_rule_id != null &&
+        (canEdit ? (
+          ruleConfirm ? (
+            <span className="flex items-center gap-1">
+              <Button
+                variant="danger"
+                className="h-8 px-2 text-sm"
+                disabled={cancelRule.isPending}
+                onClick={() => cancelRule.mutate()}
+              >
+                {cancelRule.isPending ? "…" : "Cancel rule"}
+              </Button>
+              <Button variant="ghost" className="h-8 px-2 text-sm" onClick={() => setRuleConfirm(false)}>
+                Keep
+              </Button>
+            </span>
+          ) : (
+            <Button
+              variant="ghost"
+              aria-label="Cancel recurring rule"
+              className="h-8 px-2 text-sm"
+              onClick={() => setRuleConfirm(true)}
+            >
+              🔁
+            </Button>
+          )
+        ) : (
+          <span title="Recurring expense" className="text-sm">
+            🔁
+          </span>
+        ))}
       {canEdit && (
         <Button
           variant="ghost"
@@ -363,7 +404,7 @@ function SettleUpDialog({
         </label>
         <label className="grid gap-1.5 text-sm">
           Amount ({currency})
-          <Input name="amount" type="number" step="0.01" min="0.01" required defaultValue={initial ? (initial.amount / 100).toFixed(2) : undefined} />
+          <Input name="amount" type="number" step="0.01" min="0.01" inputMode="decimal" autoComplete="off" required defaultValue={initial ? (initial.amount / 100).toFixed(2) : undefined} />
         </label>
         {error && (
           <p role="alert" className="text-sm text-destructive">

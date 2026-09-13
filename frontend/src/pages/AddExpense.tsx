@@ -179,6 +179,8 @@ export default function AddExpense({
               type="number"
               step="0.01"
               min="0"
+              inputMode="decimal"
+              autoComplete="off"
               placeholder="0.00"
               required
               value={amount}

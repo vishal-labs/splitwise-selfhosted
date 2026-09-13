@@ -24,6 +24,17 @@ export async function api<T>(path: string, opts: Opts = {}): Promise<T> {
     body: form ?? (body ? JSON.stringify(body) : undefined),
   });
   if (!res.ok) {
+    // Session expired mid-use: clear in-memory state by reloading into /login.
+    // Auth endpoints are excluded so Login/Register/me can still see their own 401s.
+    if (
+      res.status === 401 &&
+      !path.startsWith("/users/login") &&
+      !path.startsWith("/users/register") &&
+      !path.startsWith("/users/me")
+    ) {
+      location.href = "/login";
+      throw new ApiError(401, "Session expired");
+    }
     let message = res.statusText;
     try {
       const data = (await res.json()) as { detail?: string };
@@ -82,6 +93,7 @@ export type Expense = {
   rate: number | null;
   date: string;
   category: string | null;
+  recurring_rule_id: number | null;
   splits: Split[];
 };
 
@@ -160,6 +172,9 @@ export const createSettlement = (
   groupId: number | string,
   body: { payer_id: number; payee_id: number; amount_minor: number; currency: string },
 ) => api(`/groups/${groupId}/settlements`, { body });
+
+export const cancelRecurring = (groupId: number | string, ruleId: number) =>
+  api(`/groups/${groupId}/recurring/${ruleId}`, { method: "DELETE" });
 
 // --- Task 12: analytics + activity (appended to minimize merge conflict) ---
 

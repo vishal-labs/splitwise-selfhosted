@@ -1,7 +1,7 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router";
-import { api, createGroup, useGroups, type Group } from "../api";
+import { api, createGroup, getGroupDebts, useGroups, type Group } from "../api";
 import { useMe } from "../App";
 import { Avatar } from "../components/Avatar";
 import { Button } from "../components/Button";
@@ -22,6 +22,28 @@ function useNetBalance(group: Group, myId: number | undefined) {
         0,
       ),
   });
+}
+
+/** Aggregate "owed to you" / "you owe" across all groups. Shares the ["debts", id] cache with GroupCard. */
+function useNetTotals(groups: Group[] | undefined, myId: number) {
+  const queries = useQueries({
+    queries: (groups ?? []).map((g) => ({
+      queryKey: ["debts", g.id],
+      queryFn: () => getGroupDebts(g.id),
+      enabled: myId > 0,
+    })),
+  });
+  // ponytail: sums assume one currency across groups; split per-currency if that ever varies
+  return queries.reduce(
+    (acc, q) => {
+      const net = (q.data ?? []).reduce(
+        (n, d) => n + (d.to === myId ? d.amount : d.from === myId ? -d.amount : 0),
+        0,
+      );
+      return { owed: acc.owed + Math.max(net, 0), owe: acc.owe + Math.max(-net, 0) };
+    },
+    { owed: 0, owe: 0 },
+  );
 }
 
 function GroupCard({ group, myId }: { group: Group; myId: number }) {
@@ -54,6 +76,7 @@ export const joinGroup = (code: string) =>
 export default function Dashboard() {
   const { data: me } = useMe();
   const { data: groups, isPending } = useGroups();
+  const { owed, owe } = useNetTotals(groups, me?.id ?? 0);
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
@@ -108,6 +131,22 @@ export default function Dashboard() {
           <Button onClick={() => setOpen(true)}>New group</Button>
         </div>
       </div>
+
+      {(owed > 0 || owe > 0) && (
+        <p className="mt-2 text-sm font-medium">
+          {owed > 0 && (
+            <span className="text-success">
+              You're owed {formatMinor(owed, groups?.[0]?.currency ?? "USD")}
+            </span>
+          )}
+          {owed > 0 && owe > 0 && <span className="text-muted-fg"> · </span>}
+          {owe > 0 && (
+            <span className="text-destructive">
+              You owe {formatMinor(owe, groups?.[0]?.currency ?? "USD")}
+            </span>
+          )}
+        </p>
+      )}
 
       {groups && groups.length > 0 ? (
         <div className="mt-4 grid gap-2">
