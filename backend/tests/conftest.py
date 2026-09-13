@@ -1,4 +1,5 @@
 import os
+import sys
 
 import pytest
 import pytest_asyncio
@@ -9,6 +10,10 @@ from httpx import ASGITransport, AsyncClient
 def db_url(tmp_path):
     url = f"sqlite+aiosqlite:///{tmp_path}/test.db"
     os.environ["DATABASE_URL"] = url
+    # ponytail: drop cached app modules so app.db's engine rebinds to this test's
+    # tmp db — module-level engine would otherwise pin the first test's db
+    for name in [n for n in sys.modules if n == "app" or n.startswith("app.")]:
+        del sys.modules[name]
     return url
 
 

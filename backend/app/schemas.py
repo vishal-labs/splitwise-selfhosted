@@ -24,3 +24,31 @@ class UserOut(BaseModel):
 
 def user_out(user: User) -> UserOut:
     return UserOut.model_validate(user)
+
+
+class GroupCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    currency: str = Field(min_length=3, max_length=3)
+
+
+class GroupOut(BaseModel):
+    model_config = {"from_attributes": True}
+
+    id: int
+    name: str
+    currency: str
+    created_by: int
+    invite_code: str
+    member_count: int = 0
+
+
+class MemberOut(UserOut):
+    role: str
+
+
+class GroupDetail(GroupOut):
+    members: list[MemberOut]
+
+
+class MemberAdd(BaseModel):
+    email: EmailStr
