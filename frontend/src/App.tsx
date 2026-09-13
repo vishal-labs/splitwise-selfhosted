@@ -1,23 +1,125 @@
-import { Route, Routes } from 'react-router'
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Navigate, NavLink, Outlet, Route, Routes, useNavigate } from "react-router";
+import { api, getMe } from "./api";
+import { Avatar } from "./components/Avatar";
+import { Button } from "./components/Button";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
 
-// Placeholder pages — real implementations land in Tasks 9–12.
+/** Current session query. */
+export function useMe() {
+  return useQuery({ queryKey: ["me"], queryFn: getMe });
+}
+
+// Placeholder pages — real implementations land in Tasks 10–12.
 function Placeholder({ name }: { name: string }) {
   return (
-    <main className="mx-auto max-w-2xl px-4 py-16">
+    <div>
       <h1 className="text-2xl font-semibold">{name}</h1>
       <p className="mt-2 text-muted-fg">Coming in a later task.</p>
-    </main>
-  )
+    </div>
+  );
+}
+
+/** Redirects to /login unless a session exists; renders the app shell. */
+function RequireAuth() {
+  const { data: me, isPending } = useMe();
+  if (isPending) return null;
+  if (!me) return <Navigate to="/login" replace />;
+  return <Shell />;
+}
+
+const tabs = [
+  { to: "/", label: "Home", end: true },
+  { to: "/activity", label: "Activity" },
+  { to: "/settings", label: "Settings" },
+];
+
+function Shell() {
+  const { data: me } = useMe();
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+
+  const logout = useMutation({
+    mutationFn: () => api("/users/logout", { method: "POST" }),
+    onSuccess: () => {
+      queryClient.clear();
+      navigate("/login", { replace: true });
+    },
+  });
+
+  return (
+    <div className="min-h-dvh">
+      <header className="sticky top-0 z-10 border-b border-border bg-bg/80 backdrop-blur">
+        <div className="mx-auto flex h-14 max-w-3xl items-center justify-between px-4">
+          <NavLink to="/" className="font-semibold">
+            Splitwise
+          </NavLink>
+          {me && (
+            <>
+              <button
+                popoverTarget="user-menu"
+                className="cursor-pointer rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [anchor-name:--avatar]"
+                aria-label="Account menu"
+              >
+                <Avatar name={me.name} size={32} />
+              </button>
+              <div
+                id="user-menu"
+                popover="auto"
+                className="m-0 w-48 rounded-card border border-border bg-card p-1 text-fg shadow-lg [position-anchor:--avatar] [position-area:bottom-end]"
+              >
+                <div className="border-b border-border px-3 py-2">
+                  <p className="truncate text-sm font-medium">{me.name}</p>
+                  <p className="truncate text-xs text-muted-fg">{me.email}</p>
+                </div>
+                <Button variant="ghost" className="w-full justify-start" onClick={() => logout.mutate()}>
+                  Log out
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-3xl px-4 pb-24 pt-6 md:pb-10">
+        <Outlet />
+      </main>
+
+      <nav
+        aria-label="Primary"
+        className="fixed inset-x-0 bottom-0 z-10 grid grid-cols-3 border-t border-border bg-card pb-[env(safe-area-inset-bottom)] md:hidden"
+      >
+        {tabs.map((t) => (
+          <NavLink
+            key={t.to}
+            to={t.to}
+            end={t.end}
+            className={({ isActive }) =>
+              `py-3 text-center text-sm ${isActive ? "font-semibold text-fg" : "text-muted-fg"}`
+            }
+          >
+            {t.label}
+          </NavLink>
+        ))}
+      </nav>
+    </div>
+  );
 }
 
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<Placeholder name="Dashboard" />} />
-      <Route path="/login" element={<Placeholder name="Login" />} />
-      <Route path="/register" element={<Placeholder name="Register" />} />
-      <Route path="/groups/:id" element={<Placeholder name="Group" />} />
-      <Route path="*" element={<Placeholder name="Not found" />} />
+      <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
+      <Route element={<RequireAuth />}>
+        <Route path="/" element={<Placeholder name="Dashboard" />} />
+        <Route path="/groups/:id" element={<Placeholder name="Group" />} />
+        <Route path="/activity" element={<Placeholder name="Activity" />} />
+        <Route path="/analytics" element={<Placeholder name="Analytics" />} />
+        <Route path="/settings" element={<Placeholder name="Settings" />} />
+      </Route>
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
-  )
+  );
 }
