@@ -40,6 +40,16 @@ const chipClasses = (active: boolean) =>
       : "border-border bg-card text-fg hover:bg-muted"
   }`;
 
+const inlineSelect =
+  "cursor-pointer rounded-lg border-0 bg-transparent px-1 font-medium hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring";
+
+// ponytail: hero-style borderless input — same language as the amount field
+const heroInput =
+  "h-10 w-full border-0 border-b border-border bg-transparent text-right text-sm tabular-nums text-fg placeholder:text-muted-fg/60 focus-visible:border-primary focus-visible:outline-none";
+
+const chipless =
+  "inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border-0 bg-transparent px-3 text-sm text-muted-fg hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring";
+
 const borderlessSelect =
   "cursor-pointer rounded-lg border-0 bg-transparent px-1 hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring";
 
@@ -248,31 +258,31 @@ export default function AddExpense({
             className="h-12 w-full rounded-lg border border-border bg-card px-3 text-lg text-fg placeholder:text-muted-fg focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
           />
 
-          <div className="grid gap-1.5 text-sm">
-            <span className="text-muted-fg">Category</span>
-            <div className="flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {CATEGORIES.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => setCategory(category === c ? null : c)}
-                  className={chipClasses(category === c)}
-                >
-                  {c}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="grid gap-1.5 text-sm">
-            <span className="text-muted-fg">Paid by</span>
-            <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-sm text-muted-fg">
+            <label className="flex items-center gap-1.5">
+              <span className="text-muted-fg">Category</span>
+              <select
+                aria-label="Category"
+                value={category ?? ""}
+                onChange={(e) => setCategory(e.target.value || null)}
+                className={`${inlineSelect} h-9 text-sm`}
+              >
+                <option value="">None</option>
+                {CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex items-center gap-1.5">
+              <span className="text-muted-fg">Paid by</span>
               <Avatar name={payerName} size={24} />
               <select
                 aria-label="Paid by"
                 value={payer}
                 onChange={(e) => setPayerId(Number(e.target.value))}
-                className={`${borderlessSelect} h-8 text-sm font-medium`}
+                className={`${inlineSelect} h-9 text-sm`}
               >
                 {members.map((m) => (
                   <option key={m.id} value={m.id}>
@@ -280,7 +290,7 @@ export default function AddExpense({
                   </option>
                 ))}
               </select>
-            </div>
+            </label>
           </div>
 
           <div className="grid gap-1.5 text-sm">
@@ -319,9 +329,12 @@ export default function AddExpense({
                       type="number"
                       step={mode === "shares" ? "1" : "0.01"}
                       min="0"
+                      inputMode="decimal"
+                      autoComplete="off"
                       placeholder={mode === "amounts" ? "0.00" : mode === "percent" ? "% of total" : "shares"}
                       value={values[m.id] ?? ""}
                       onChange={(e) => setValue(m.id, e.target.value)}
+                      className={heroInput}
                     />
                   </li>
                 ))}
@@ -336,17 +349,17 @@ export default function AddExpense({
           </div>
 
           <div className="grid gap-2">
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1">
               <input
                 type="date"
                 aria-label="Date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                className="h-8 cursor-pointer rounded-full border border-border bg-card px-3 text-sm text-fg focus-visible:outline-2 focus-visible:outline-ring"
+                className={`${chipless} cursor-pointer font-medium`}
               />
-              <label className="inline-flex h-8 max-w-full cursor-pointer items-center gap-1.5 rounded-full border border-border bg-card px-3 text-sm text-fg hover:bg-muted focus-within:outline-2 focus-within:outline-ring">
+              <label className={`${chipless} max-w-full`}>
                 <Paperclip />
-                <span className="max-w-[9rem] truncate">{file ? file.name : "Receipt"}</span>
+                <span className="max-w-[9rem] truncate font-medium">{file ? file.name : "Receipt"}</span>
                 <input
                   type="file"
                   accept=".png,.jpg,.jpeg,.webp,.pdf"
@@ -354,7 +367,7 @@ export default function AddExpense({
                   onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                 />
               </label>
-              <button type="button" aria-pressed={repeat} onClick={() => setRepeat(!repeat)} className={chipClasses(repeat)}>
+              <button type="button" aria-pressed={repeat} onClick={() => setRepeat(!repeat)} className={`${chipless} font-medium ${repeat ? "text-fg" : ""}`}>
                 Repeat
               </button>
             </div>
@@ -375,7 +388,7 @@ export default function AddExpense({
                     aria-label="Day of week"
                     value={repeatDay}
                     onChange={(e) => setRepeatDay(e.target.value)}
-                    className="h-8 cursor-pointer rounded-full border border-border bg-card px-2 text-sm focus-visible:outline-2 focus-visible:outline-ring"
+                    className={`${inlineSelect} h-9 text-sm`}
                   >
                     {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
                       <option key={d} value={d}>
@@ -389,9 +402,10 @@ export default function AddExpense({
                     aria-label="Day of month"
                     min="1"
                     max="31"
+                    inputMode="numeric"
                     value={repeatDay}
                     onChange={(e) => setRepeatDay(e.target.value)}
-                    className="h-8 w-16 rounded-full border border-border bg-card px-3 text-center text-sm text-fg focus-visible:outline-2 focus-visible:outline-ring"
+                    className="h-9 w-16 rounded-lg border-0 bg-transparent px-1 text-center text-sm font-medium hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
                   />
                 )}
               </div>
