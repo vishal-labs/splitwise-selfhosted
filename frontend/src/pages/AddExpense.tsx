@@ -10,6 +10,7 @@ import {
 } from "../api";
 import { useMe } from "../App";
 import { Avatar } from "../components/Avatar";
+import { XIcon } from "../components/icons";
 import { Button } from "../components/Button";
 import { Dialog } from "../components/Dialog";
 import { Tabs } from "../components/Tabs";
@@ -218,9 +219,9 @@ export default function AddExpense({
       bodyClassName="min-h-0 flex-1 overflow-y-auto p-0"
     >
       <form onSubmit={onSubmit} className="flex min-h-0 flex-col">
-        <div className="grid gap-5 px-5 pb-5 pt-4">
+        <div className="grid gap-5 px-5 pb-5 pt-4 max-sm:gap-4 max-sm:px-4 max-sm:pb-4 max-sm:pt-3">
           {/* Amount hero: tap the big number to type */}
-          <div className="flex items-center justify-center gap-1 border-b border-border pb-4">
+          <div className="flex items-center justify-center gap-1 border-b border-border pb-4 max-sm:pb-3">
             <select
               aria-label="Currency"
               value={currency}
@@ -244,7 +245,7 @@ export default function AddExpense({
               required
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              className="amount-input h-16 w-full max-w-[13rem] border-0 bg-transparent text-center text-4xl font-semibold tabular-nums text-fg placeholder:text-muted-fg/60 focus-visible:outline-none"
+              className="amount-input h-16 w-full max-w-[13rem] border-0 bg-transparent text-center text-4xl font-semibold tabular-nums text-fg placeholder:text-muted-fg/60 focus-visible:outline-none max-sm:h-14 max-sm:text-3xl"
             />
           </div>
 
@@ -255,7 +256,7 @@ export default function AddExpense({
             required
             maxLength={500}
             placeholder="Add a description"
-            className="h-12 w-full rounded-lg border border-border bg-card px-3 text-lg text-fg placeholder:text-muted-fg focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+            className="h-12 w-full rounded-lg border border-border bg-card px-3 text-lg text-fg placeholder:text-muted-fg focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring max-sm:h-11 max-sm:text-base"
           />
 
           <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-sm text-muted-fg">
@@ -359,9 +360,9 @@ export default function AddExpense({
                           next.delete(m.id);
                           setSplitMembers(next);
                         }}
-                        className="shrink-0 cursor-pointer px-0.5 text-sm text-muted-fg hover:text-destructive disabled:cursor-not-allowed disabled:opacity-30"
+                        className="shrink-0 cursor-pointer px-0.5 text-muted-fg hover:text-destructive disabled:cursor-not-allowed disabled:opacity-30"
                       >
-                        ✕
+                        <XIcon size={14} />
                       </button>
                     </li>
                   ))}

@@ -20,6 +20,7 @@ import {
 } from "../api";
 import { useMe } from "../App";
 import { Avatar } from "../components/Avatar";
+import { CheckIcon, CopyIcon, PencilIcon, PlusIcon, RepeatIcon, TrashIcon, XIcon } from "../components/icons";
 import { Button } from "../components/Button";
 import { Dialog } from "../components/Dialog";
 import { EmptyState } from "../components/EmptyState";
@@ -111,15 +112,15 @@ function ExpenseRow({
               variant="ghost"
               size="icon"
               aria-label="Cancel recurring rule"
-              className="h-8 text-sm"
+              className="h-8"
               onClick={() => setRuleConfirm(true)}
             >
-              🔁
+              <RepeatIcon size={15} />
             </Button>
           )
         ) : (
-          <span title="Recurring expense" className="text-sm">
-            🔁
+          <span title="Recurring expense" className="flex items-center px-1 text-muted-fg">
+            <RepeatIcon size={15} />
           </span>
         ))}
       {canEdit && (
@@ -130,7 +131,7 @@ function ExpenseRow({
           className="h-8 text-sm text-muted-fg"
           onClick={() => onEdit(expense)}
         >
-          ✎
+          <PencilIcon size={15} />
         </Button>
       )}
       {canEdit &&
@@ -156,7 +157,7 @@ function ExpenseRow({
             className="h-8 text-sm text-muted-fg"
             onClick={() => setConfirm(true)}
           >
-            ✕
+            <XIcon size={15} />
           </Button>
         ))}
       </span>
@@ -581,17 +582,15 @@ export default function GroupDetail() {
           <p className="text-sm text-muted-fg">{group.currency}</p>
         </div>
         <div className="flex flex-1 justify-end gap-2 max-sm:w-full">
-          <Button onClick={() => setExpenseOpen(true)} className="max-sm:flex-1">
+          <Button onClick={() => setExpenseOpen(true)} className="max-sm:flex-1 max-sm:text-sm">
             Add expense
           </Button>
           <Button variant="secondary" onClick={() => setAddOpen(true)} aria-label="Add member" className="max-sm:h-10 max-sm:w-10 max-sm:px-0 max-sm:text-lg">
             <span className="max-sm:hidden">Add member</span>
-            <span className="max-sm:inline hidden" aria-hidden="true">
-              +
-            </span>
+            <PlusIcon size={18} className="hidden max-sm:block" />
           </Button>
           <Button variant="ghost" onClick={copyInvite} aria-label="Copy invite code" className="max-sm:h-10 max-sm:w-10 max-sm:px-0">
-            {copied ? "✓" : "⧉"}
+            {copied ? <CheckIcon size={18} /> : <CopyIcon size={18} />}
           </Button>
           {group.created_by === me?.id &&
             (confirmDelete ? (
@@ -611,9 +610,7 @@ export default function GroupDetail() {
                 className="text-muted-fg hover:text-destructive max-sm:h-10 max-sm:w-10 max-sm:px-0"
               >
                 <span className="max-sm:hidden text-sm">Delete group</span>
-                <span className="max-sm:inline hidden" aria-hidden="true">
-                  🗑
-                </span>
+                <TrashIcon size={18} className="hidden max-sm:block" />
               </Button>
             ))}
         </div>
@@ -634,7 +631,7 @@ export default function GroupDetail() {
                 className="cursor-pointer text-xs text-muted-fg hover:text-destructive"
                 onClick={() => leave.mutate(m.id)}
               >
-                ✕
+                <XIcon size={12} />
               </button>
             )}
             {me && m.id === me.id && group.members.length > 1 && (

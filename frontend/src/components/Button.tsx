@@ -23,7 +23,7 @@ const sizes = {
 export function Button({ variant = "primary", size = "md", className = "", ...rest }: Props) {
   return (
     <button
-      className={`inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg transition-[background-color,opacity] duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 ${sizes[size]} ${styles[variant]} ${className}`}
+      className={`inline-flex cursor-pointer items-center justify-center gap-2 whitespace-nowrap transition-[background-color,opacity] duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 ${sizes[size]} ${styles[variant]} ${className}`}
       {...rest}
     />
   );

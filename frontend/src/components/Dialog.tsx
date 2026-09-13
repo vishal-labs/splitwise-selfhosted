@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { Button } from "./Button";
+import { XIcon } from "./icons";
 
 type Props = {
   open: boolean;
@@ -33,13 +34,13 @@ export function Dialog({ open, onClose, title, children, className, bodyClassNam
       }}
       className={`dialog-sheet m-auto w-[min(28rem,calc(100vw-2rem))] rounded-card bg-card p-0 text-fg shadow-xl backdrop:bg-black/50 ${className ?? ""}`}
     >
-      <div className="flex items-center justify-between border-b border-border px-5 py-4">
+      <div className="flex items-center justify-between border-b border-border px-5 py-4 max-sm:px-4 max-sm:py-3">
         <h2 className="font-semibold">{title}</h2>
         <Button variant="ghost" aria-label="Close" onClick={() => ref.current?.close()}>
-          ✕
+          <XIcon size={18} />
         </Button>
       </div>
-      <div className={bodyClassName ?? "p-5"}>{children}</div>
+      <div className={bodyClassName ?? "p-5 max-sm:p-4"}>{children}</div>
     </dialog>
   );
 }

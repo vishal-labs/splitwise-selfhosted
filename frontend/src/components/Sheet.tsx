@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { Button } from "./Button";
+import { XIcon } from "./icons";
 
 type Props = {
   open: boolean;
@@ -31,7 +32,7 @@ export function Sheet({ open, onClose, title, children }: Props) {
       <div className="flex items-center justify-between border-b border-border px-5 py-4">
         <h2 className="font-semibold">{title}</h2>
         <Button variant="ghost" aria-label="Close" onClick={() => ref.current?.close()}>
-          ✕
+          <XIcon size={18} />
         </Button>
       </div>
       <div className="p-5">{children}</div>
