@@ -48,12 +48,17 @@ function GroupCard({ group, myId }: { group: Group; myId: number }) {
   );
 }
 
+export const joinGroup = (code: string) =>
+  api<Group>(`/groups/join/${encodeURIComponent(code)}`, { method: "POST" });
+
 export default function Dashboard() {
   const { data: me } = useMe();
   const { data: groups, isPending } = useGroups();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [joinOpen, setJoinOpen] = useState(false);
   const [error, setError] = useState("");
+  const [joinError, setJoinError] = useState("");
 
   const create = useMutation({
     mutationFn: (body: { name: string; currency: string }) => createGroup(body),
@@ -62,6 +67,15 @@ export default function Dashboard() {
       setOpen(false);
     },
     onError: (e) => setError(e instanceof Error ? e.message : "Something went wrong"),
+  });
+
+  const join = useMutation({
+    mutationFn: (code: string) => joinGroup(code),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["groups"] });
+      setJoinOpen(false);
+    },
+    onError: (e) => setJoinError(e instanceof Error ? e.message : "Something went wrong"),
   });
 
   function onSubmit(e: FormEvent<HTMLFormElement>) {
@@ -74,13 +88,25 @@ export default function Dashboard() {
     });
   }
 
+  function onJoin(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setJoinError("");
+    const data = new FormData(e.currentTarget);
+    join.mutate(((data.get("code") as string) || "").trim());
+  }
+
   if (isPending) return <p className="text-muted-fg">Loading…</p>;
 
   return (
     <div>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Groups</h1>
-        <Button onClick={() => setOpen(true)}>New group</Button>
+        <div className="flex gap-2">
+          <Button onClick={() => setJoinOpen(true)} variant="ghost">
+            Join
+          </Button>
+          <Button onClick={() => setOpen(true)}>New group</Button>
+        </div>
       </div>
 
       {groups && groups.length > 0 ? (
@@ -116,6 +142,23 @@ export default function Dashboard() {
           )}
           <Button type="submit" disabled={create.isPending}>
             {create.isPending ? "Creating…" : "Create"}
+          </Button>
+        </form>
+      </Dialog>
+
+      <Dialog open={joinOpen} onClose={() => setJoinOpen(false)} title="Join group">
+        <form onSubmit={onJoin} className="grid gap-4">
+          <label className="grid gap-1.5 text-sm">
+            Invite code
+            <Input name="code" required maxLength={16} placeholder="e.g. 3fa1b2c4" />
+          </label>
+          {joinError && (
+            <p role="alert" className="text-sm text-destructive">
+              {joinError}
+            </p>
+          )}
+          <Button type="submit" disabled={join.isPending}>
+            {join.isPending ? "Joining…" : "Join"}
           </Button>
         </form>
       </Dialog>
