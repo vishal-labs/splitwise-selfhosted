@@ -1,0 +1,21 @@
+services:
+  api:
+    build: ./backend
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:////data/app.db
+    volumes:
+      - api-data:/data
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  web:
+    build: ./frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  api-data:
