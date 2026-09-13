@@ -6,10 +6,14 @@ type Props = {
   onClose: () => void;
   title: string;
   children: ReactNode;
+  /** Extra classes for the <dialog> element (size/layout overrides). */
+  className?: string;
+  /** Classes for the content wrapper; replaces the default padding. */
+  bodyClassName?: string;
 };
 
 /** Modal built on the native <dialog> element (focus trap + Escape for free). */
-export function Dialog({ open, onClose, title, children }: Props) {
+export function Dialog({ open, onClose, title, children, className, bodyClassName }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -27,7 +31,7 @@ export function Dialog({ open, onClose, title, children }: Props) {
         // light dismiss: click landed on the backdrop (the dialog element itself)
         if (e.target === ref.current) ref.current.close();
       }}
-      className="m-auto w-[min(28rem,calc(100vw-2rem))] rounded-card bg-card p-0 text-fg shadow-xl backdrop:bg-black/50"
+      className={`m-auto w-[min(28rem,calc(100vw-2rem))] rounded-card bg-card p-0 text-fg shadow-xl backdrop:bg-black/50 ${className ?? ""}`}
     >
       <div className="flex items-center justify-between border-b border-border px-5 py-4">
         <h2 className="font-semibold">{title}</h2>
@@ -35,7 +39,7 @@ export function Dialog({ open, onClose, title, children }: Props) {
           ✕
         </Button>
       </div>
-      <div className="p-5">{children}</div>
+      <div className={bodyClassName ?? "p-5"}>{children}</div>
     </dialog>
   );
 }

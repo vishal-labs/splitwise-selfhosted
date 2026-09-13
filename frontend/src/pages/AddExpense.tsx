@@ -9,9 +9,10 @@ import {
   type Member,
 } from "../api";
 import { useMe } from "../App";
+import { Avatar } from "../components/Avatar";
 import { Button } from "../components/Button";
+import { Dialog } from "../components/Dialog";
 import { Input } from "../components/Input";
-import { Sheet } from "../components/Sheet";
 import { Tabs } from "../components/Tabs";
 
 // ponytail: backend has no GET /api/rates router yet (services/rates.py exists, no endpoint) — static list until it does
@@ -23,13 +24,44 @@ const MODES = [
   { id: "percent", label: "Percent" },
   { id: "shares", label: "Shares" },
 ] as const;
+const FREQUENCIES = [
+  { id: "weekly", label: "Weekly" },
+  { id: "monthly", label: "Monthly" },
+  { id: "yearly", label: "Yearly" },
+] as const;
 
 type Mode = (typeof MODES)[number]["id"];
+type Frequency = (typeof FREQUENCIES)[number]["id"];
 
-const selectClasses =
-  "h-10 w-full rounded-lg border border-border bg-card px-3 text-fg focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring";
+const chipClasses = (active: boolean) =>
+  `shrink-0 cursor-pointer rounded-full border px-3 py-1 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-ring ${
+    active
+      ? "border-primary bg-primary text-primary-fg"
+      : "border-border bg-card text-fg hover:bg-muted"
+  }`;
 
-/** Slide-over form to add (or edit, when `expense` is given) an expense. Mounted conditionally (fresh state per open). */
+const borderlessSelect =
+  "cursor-pointer rounded-lg border-0 bg-transparent px-1 hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring";
+
+function Paperclip() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+    </svg>
+  );
+}
+
+/** Centered modal (bottom sheet on mobile) to add (or edit, when `expense` is given) an expense. Mounted conditionally (fresh state per open). */
 export default function AddExpense({
   groupId,
   expense,
@@ -55,9 +87,13 @@ export default function AddExpense({
   const [included, setIncluded] = useState<Set<number> | null>(null);
   const [values, setValues] = useState<Record<number, string>>({});
   const [currency, setCurrency] = useState<string>(expense?.currency ?? group?.currency ?? "USD");
-  const [date, setDate] = useState(expense?.date ?? "");
+  const [date, setDate] = useState(expense?.date ?? new Date().toLocaleDateString("en-CA")); // YYYY-MM-DD, local time
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState("");
+  // ponytail: repeat UI only — backend has no recurrence field yet; wire into the POST body when it does
+  const [repeat, setRepeat] = useState(false);
+  const [frequency, setFrequency] = useState<Frequency>("monthly");
+  const [repeatDay, setRepeatDay] = useState("1");
 
   const groupCurrency = group?.currency ?? "USD";
   const sameCurrency = currency === groupCurrency;
@@ -66,6 +102,7 @@ export default function AddExpense({
   const includeSet =
     included ?? new Set(expense ? expense.splits.map((s) => s.user_id) : members.map((m) => m.id));
   const amountMinor = Math.round((parseFloat(amount) || 0) * 100);
+  const payerName = members.find((m) => m.id === payer)?.name ?? me?.name ?? "?";
 
   const setValue = (id: number, v: string) => setValues((s) => ({ ...s, [id]: v }));
 
@@ -156,18 +193,25 @@ export default function AddExpense({
   }
 
   const h = hint();
+  const invalid = validate() !== "";
 
   return (
-    <Sheet open onClose={onClose} title={expense ? "Edit expense" : "Add expense"}>
-      <form onSubmit={onSubmit} className="grid gap-4">
-        <label className="grid gap-1.5 text-sm">
-          Amount
-          <div className="flex gap-2">
+    <Dialog
+      open
+      onClose={onClose}
+      title={expense ? "Edit expense" : "Add expense"}
+      className="expense-modal flex flex-col overflow-hidden"
+      bodyClassName="min-h-0 flex-1 overflow-y-auto p-0"
+    >
+      <form onSubmit={onSubmit} className="flex min-h-0 flex-col">
+        <div className="grid gap-5 px-5 pb-5 pt-4">
+          {/* Amount hero: tap the big number to type */}
+          <div className="flex items-center justify-center gap-1 border-b border-border pb-4">
             <select
               aria-label="Currency"
               value={currency}
               onChange={(e) => setCurrency(e.target.value)}
-              className={`${selectClasses} w-24`}
+              className={`${borderlessSelect} h-12 text-lg text-muted-fg`}
             >
               {[...new Set([groupCurrency, ...CURRENCIES])].map((c) => (
                 <option key={c} value={c}>
@@ -175,139 +219,193 @@ export default function AddExpense({
                 </option>
               ))}
             </select>
-            <Input
+            <input
               type="number"
               step="0.01"
               min="0"
               inputMode="decimal"
               autoComplete="off"
+              aria-label="Amount"
               placeholder="0.00"
               required
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
+              className="amount-input h-16 w-full max-w-[13rem] border-0 bg-transparent text-center text-4xl font-semibold tabular-nums text-fg placeholder:text-muted-fg/60 focus-visible:outline-none"
             />
           </div>
-        </label>
 
-        <label className="grid gap-1.5 text-sm">
-          Description
-          <Input
+          <input
+            aria-label="Description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             required
             maxLength={500}
-            placeholder="What was it for?"
+            placeholder="Add a description"
+            className="h-12 w-full rounded-lg border border-border bg-card px-3 text-lg text-fg placeholder:text-muted-fg focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
           />
-        </label>
 
-        <div className="grid gap-1.5 text-sm">
-          Category
-          <div className="flex flex-wrap gap-1.5">
-            {CATEGORIES.map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => setCategory(category === c ? null : c)}
-                className={`cursor-pointer rounded-full border px-3 py-1 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-ring ${
-                  category === c
-                    ? "border-primary bg-primary text-primary-fg"
-                    : "border-border bg-card text-fg hover:bg-muted"
-                }`}
+          <div className="grid gap-1.5 text-sm">
+            <span className="text-muted-fg">Category</span>
+            <div className="flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {CATEGORIES.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setCategory(category === c ? null : c)}
+                  className={chipClasses(category === c)}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid gap-1.5 text-sm">
+            <span className="text-muted-fg">Paid by</span>
+            <div className="flex items-center gap-2">
+              <Avatar name={payerName} size={24} />
+              <select
+                aria-label="Paid by"
+                value={payer}
+                onChange={(e) => setPayerId(Number(e.target.value))}
+                className={`${borderlessSelect} h-8 text-sm font-medium`}
               >
-                {c}
+                {members.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.id === me?.id ? "You" : m.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid gap-1.5 text-sm">
+            <span className="text-muted-fg">Split</span>
+            <Tabs tabs={MODES.map((m) => ({ id: m.id, label: m.label }))} value={mode} onChange={(id) => setMode(id as Mode)} />
+            {mode === "equal" ? (
+              <ul className="grid gap-1">
+                {members.map((m) => (
+                  <li key={m.id} className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={includeSet.has(m.id)}
+                      onChange={() => {
+                        const next = new Set(includeSet);
+                        if (next.has(m.id)) next.delete(m.id);
+                        else next.add(m.id);
+                        setIncluded(next);
+                      }}
+                      className="h-4 w-4 accent-primary"
+                      id={`inc-${m.id}`}
+                    />
+                    <label htmlFor={`inc-${m.id}`} className="cursor-pointer">
+                      {m.id === me?.id ? "You" : m.name}
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <ul className="grid gap-2">
+                {members.map((m) => (
+                  <li key={m.id} className="flex items-center gap-2">
+                    <span className="w-28 shrink-0 truncate text-sm text-muted-fg">
+                      {m.id === me?.id ? "You" : m.name}
+                    </span>
+                    <Input
+                      type="number"
+                      step={mode === "shares" ? "1" : "0.01"}
+                      min="0"
+                      placeholder={mode === "amounts" ? "0.00" : mode === "percent" ? "% of total" : "shares"}
+                      value={values[m.id] ?? ""}
+                      onChange={(e) => setValue(m.id, e.target.value)}
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
+            {!sameCurrency && mode === "amounts" && (
+              <p className="text-xs text-muted-fg">
+                Splits are computed on the amount converted to {groupCurrency}; the backend validates the sum.
+              </p>
+            )}
+            {h && <p className="text-xs text-muted-fg">{h}</p>}
+          </div>
+
+          <div className="grid gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="date"
+                aria-label="Date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="h-8 cursor-pointer rounded-full border border-border bg-card px-3 text-sm text-fg focus-visible:outline-2 focus-visible:outline-ring"
+              />
+              <label className="inline-flex h-8 max-w-full cursor-pointer items-center gap-1.5 rounded-full border border-border bg-card px-3 text-sm text-fg hover:bg-muted focus-within:outline-2 focus-within:outline-ring">
+                <Paperclip />
+                <span className="max-w-[9rem] truncate">{file ? file.name : "Receipt"}</span>
+                <input
+                  type="file"
+                  accept=".png,.jpg,.jpeg,.webp,.pdf"
+                  className="sr-only"
+                  onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                />
+              </label>
+              <button type="button" aria-pressed={repeat} onClick={() => setRepeat(!repeat)} className={chipClasses(repeat)}>
+                Repeat
               </button>
-            ))}
+            </div>
+            {repeat && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {FREQUENCIES.map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => setFrequency(f.id)}
+                    className={chipClasses(frequency === f.id)}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+                {frequency === "weekly" ? (
+                  <select
+                    aria-label="Day of week"
+                    value={repeatDay}
+                    onChange={(e) => setRepeatDay(e.target.value)}
+                    className="h-8 cursor-pointer rounded-full border border-border bg-card px-2 text-sm focus-visible:outline-2 focus-visible:outline-ring"
+                  >
+                    {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="number"
+                    aria-label="Day of month"
+                    min="1"
+                    max="31"
+                    value={repeatDay}
+                    onChange={(e) => setRepeatDay(e.target.value)}
+                    className="h-8 w-16 rounded-full border border-border bg-card px-3 text-center text-sm text-fg focus-visible:outline-2 focus-visible:outline-ring"
+                  />
+                )}
+              </div>
+            )}
           </div>
         </div>
 
-        <label className="grid gap-1.5 text-sm">
-          Paid by
-          <select value={payer} onChange={(e) => setPayerId(Number(e.target.value))} className={selectClasses}>
-            {members.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.id === me?.id ? "You" : m.name}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <div className="grid gap-1.5 text-sm">
-          Split
-          <Tabs tabs={MODES.map((m) => ({ id: m.id, label: m.label }))} value={mode} onChange={(id) => setMode(id as Mode)} />
-          {mode === "equal" ? (
-            <ul className="grid gap-1">
-              {members.map((m) => (
-                <li key={m.id} className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={includeSet.has(m.id)}
-                    onChange={() => {
-                      const next = new Set(includeSet);
-                      if (next.has(m.id)) next.delete(m.id);
-                      else next.add(m.id);
-                      setIncluded(next);
-                    }}
-                    className="h-4 w-4 accent-primary"
-                    id={`inc-${m.id}`}
-                  />
-                  <label htmlFor={`inc-${m.id}`} className="cursor-pointer">
-                    {m.id === me?.id ? "You" : m.name}
-                  </label>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <ul className="grid gap-2">
-              {members.map((m) => (
-                <li key={m.id} className="flex items-center gap-2">
-                  <span className="w-28 shrink-0 truncate text-sm text-muted-fg">
-                    {m.id === me?.id ? "You" : m.name}
-                  </span>
-                  <Input
-                    type="number"
-                    step={mode === "shares" ? "1" : "0.01"}
-                    min="0"
-                    placeholder={mode === "amounts" ? "0.00" : mode === "percent" ? "% of total" : "shares"}
-                    value={values[m.id] ?? ""}
-                    onChange={(e) => setValue(m.id, e.target.value)}
-                  />
-                </li>
-              ))}
-            </ul>
-          )}
-          {!sameCurrency && mode === "amounts" && (
-            <p className="text-xs text-muted-fg">
-              Splits are computed on the amount converted to {groupCurrency}; the backend validates the sum.
+        <div className="sticky bottom-0 border-t border-border bg-card px-5 py-3">
+          {error && (
+            <p role="alert" className="mb-2 text-sm text-destructive">
+              {error}
             </p>
           )}
-          {h && <p className="text-xs text-muted-fg">{h}</p>}
+          <Button type="submit" disabled={save.isPending || invalid} className="w-full">
+            {save.isPending ? "Saving…" : expense ? "Save changes" : "Add expense"}
+          </Button>
         </div>
-
-        <label className="grid gap-1.5 text-sm">
-          Date <span className="text-muted-fg">(optional)</span>
-          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-        </label>
-
-        <label className="grid gap-1.5 text-sm">
-          Receipt <span className="text-muted-fg">(png/jpg/webp/pdf, max 5MB)</span>
-          <Input
-            type="file"
-            accept=".png,.jpg,.jpeg,.webp,.pdf"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            className="h-auto py-2 file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-sm"
-          />
-        </label>
-
-        {error && (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
-        )}
-
-        <Button type="submit" disabled={save.isPending}>
-          {save.isPending ? "Saving…" : expense ? "Save changes" : "Add expense"}
-        </Button>
       </form>
-    </Sheet>
+    </Dialog>
   );
 }
