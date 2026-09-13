@@ -1,0 +1,36 @@
+@import "tailwindcss";
+@import "./tokens.css";
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-fg: var(--fg);
+  --color-card: var(--card);
+  --color-card-fg: var(--card-fg);
+  --color-muted: var(--muted);
+  --color-muted-fg: var(--muted-fg);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-primary-fg: var(--primary-fg);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-destructive: var(--destructive);
+  --color-destructive-fg: var(--destructive-fg);
+  --color-positive: var(--positive);
+  --color-negative: var(--negative);
+  --color-ring: var(--ring);
+
+  --font-sans: var(--font-sans);
+  --radius-card: 0.75rem;
+}
+
+body {
+  @apply bg-bg text-fg font-sans antialiased;
+}
+
+::backdrop {
+  background: oklch(0 0 0 / 50%);
+}
+
+@keyframes slide-in {
+  from { transform: translateX(100%); }
+}

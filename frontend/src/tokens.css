@@ -1,0 +1,46 @@
+/* Design tokens — "Splitwise" minimal finance app.
+   Palette: slate navy + amber primary (trust/finance profile from ui-ux-pro-max).
+   Font: IBM Plex Sans (headings + body). All colors oklch. */
+
+:root {
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+
+  /* light */
+  --bg: oklch(0.984 0.003 247);          /* slate-50 */
+  --fg: oklch(0.208 0.042 265);          /* slate-900 */
+  --card: oklch(1 0 0);                  /* white */
+  --card-fg: oklch(0.208 0.042 265);
+  --muted: oklch(0.968 0.007 247);       /* slate-100 */
+  --muted-fg: oklch(0.554 0.046 257);    /* slate-500 */
+  --border: oklch(0.929 0.013 255);      /* slate-200 */
+  --primary: oklch(0.784 0.17 70);       /* amber-500 */
+  --primary-fg: oklch(0.208 0.042 265);
+  --accent: oklch(0.606 0.229 292);      /* violet-500 */
+  --accent-fg: oklch(0.984 0.003 247);
+  --destructive: oklch(0.637 0.237 25);  /* red-500 */
+  --destructive-fg: oklch(0.984 0.003 247);
+  --positive: oklch(0.6 0.15 155);       /* green-500 */
+  --negative: oklch(0.637 0.237 25);
+  --ring: oklch(0.784 0.17 70);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: oklch(0.208 0.042 265);        /* slate-900 navy */
+    --fg: oklch(0.984 0.003 247);
+    --card: oklch(0.265 0.03 264);       /* slate-800-ish */
+    --card-fg: oklch(0.984 0.003 247);
+    --muted: oklch(0.31 0.036 264);
+    --muted-fg: oklch(0.7 0.03 256);     /* slate-400 */
+    --border: oklch(0.372 0.044 257);    /* slate-600 */
+    --primary: oklch(0.828 0.164 75);    /* amber-400, brighter on dark */
+    --primary-fg: oklch(0.208 0.042 265);
+    --accent: oklch(0.65 0.22 292);
+    --accent-fg: oklch(0.984 0.003 247);
+    --destructive: oklch(0.68 0.2 25);
+    --destructive-fg: oklch(0.208 0.042 265);
+    --positive: oklch(0.68 0.16 155);
+    --negative: oklch(0.68 0.2 25);
+    --ring: oklch(0.828 0.164 75);
+  }
+}
