@@ -495,7 +495,7 @@ export default function GroupDetail() {
   });
 
   async function copyInvite() {
-    await navigator.clipboard.writeText(`${location.origin}/join/${group?.invite_code ?? ""}`);
+    await navigator.clipboard.writeText(group?.invite_code ?? "");
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
@@ -519,7 +519,7 @@ export default function GroupDetail() {
             Add member
           </Button>
           <Button variant="ghost" onClick={copyInvite}>
-            {copied ? "Copied ✓" : "Copy invite"}
+            {copied ? "Copied ✓" : "Copy code"}
           </Button>
         </div>
       </div>
