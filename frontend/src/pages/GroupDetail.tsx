@@ -1,12 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
-import { useParams } from "react-router";
+import { useNavigate, useParams } from "react-router";
 import {
   addComment,
   addMember,
   cancelRecurring,
   createSettlement,
   deleteExpense,
+  deleteGroup,
   getComments,
   removeMember,
   useGroup,
@@ -534,11 +535,21 @@ export default function GroupDetail() {
   const { data: me } = useMe();
   const { data: group, isPending, error } = useGroup(id);
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [tab, setTab] = useState("expenses");
   const [addOpen, setAddOpen] = useState(false);
   const [expenseOpen, setExpenseOpen] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
   const [copied, setCopied] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const del = useMutation({
+    mutationFn: () => deleteGroup(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["groups"] });
+      navigate("/");
+    },
+  });
 
   const leave = useMutation({
     mutationFn: (userId: number) => removeMember(id, userId),
@@ -582,6 +593,29 @@ export default function GroupDetail() {
           <Button variant="ghost" onClick={copyInvite} aria-label="Copy invite code" className="max-sm:h-10 max-sm:w-10 max-sm:px-0">
             {copied ? "✓" : "⧉"}
           </Button>
+          {group.created_by === me?.id &&
+            (confirmDelete ? (
+              <span className="flex items-center gap-1">
+                <Button variant="danger" disabled={del.isPending} onClick={() => del.mutate()}>
+                  {del.isPending ? "…" : "Delete?"}
+                </Button>
+                <Button variant="ghost" onClick={() => setConfirmDelete(false)}>
+                  Cancel
+                </Button>
+              </span>
+            ) : (
+              <Button
+                variant="ghost"
+                onClick={() => setConfirmDelete(true)}
+                aria-label="Delete group"
+                className="text-muted-fg hover:text-destructive max-sm:h-10 max-sm:w-10 max-sm:px-0"
+              >
+                <span className="max-sm:hidden text-sm">Delete group</span>
+                <span className="max-sm:inline hidden" aria-hidden="true">
+                  🗑
+                </span>
+              </Button>
+            ))}
         </div>
       </div>
 

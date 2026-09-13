@@ -90,6 +90,8 @@ export default function AddExpense({
   const [payerId, setPayerId] = useState<number | null>(expense?.payer_id ?? null);
   const [mode, setMode] = useState<Mode>("equal");
   const [included, setIncluded] = useState<Set<number> | null>(null);
+  // Members listed in amounts/percent/shares rows; null = "all" default (edit mode: existing splits).
+  const [splitMembers, setSplitMembers] = useState<Set<number> | null>(null);
   const [values, setValues] = useState<Record<number, string>>({});
   const [currency, setCurrency] = useState<string>(expense?.currency ?? group?.currency ?? "USD");
   const [date, setDate] = useState(expense?.date ?? new Date().toLocaleDateString("en-CA")); // YYYY-MM-DD, local time
@@ -106,13 +108,16 @@ export default function AddExpense({
   // ponytail: edits prefill as equal-split over the expense's split members; per-mode prefill not worth it
   const includeSet =
     included ?? new Set(expense ? expense.splits.map((s) => s.user_id) : members.map((m) => m.id));
+  const splitSet =
+    splitMembers ?? new Set(expense ? expense.splits.map((s) => s.user_id) : members.map((m) => m.id));
+  const splitRows = members.filter((m) => splitSet.has(m.id));
   const amountMinor = Math.round((parseFloat(amount) || 0) * 100);
   const payerName = members.find((m) => m.id === payer)?.name ?? me?.name ?? "?";
 
   const setValue = (id: number, v: string) => setValues((s) => ({ ...s, [id]: v }));
 
   function perMember(): { id: number; v: number }[] {
-    return members.map((m) => ({ id: m.id, v: parseFloat(values[m.id] ?? "") || 0 }));
+    return splitRows.map((m) => ({ id: m.id, v: parseFloat(values[m.id] ?? "") || 0 }));
   }
 
   // Live "remaining / over" indicator; null when not applicable.
@@ -158,7 +163,7 @@ export default function AddExpense({
       const splits =
         mode === "equal"
           ? [...includeSet].map((user_id) => ({ user_id, mode: "equal" as const, value: null }))
-          : members.map((m) => ({
+          : splitRows.map((m) => ({
               user_id: m.id,
               mode,
               value: mode === "amounts" ? (parseFloat(values[m.id] ?? "") || 0) : mode === "shares" ? parseInt(values[m.id] ?? "", 10) : (parseFloat(values[m.id] ?? "") || 0),
@@ -322,31 +327,67 @@ export default function AddExpense({
                 ))}
               </div>
             ) : (
-              <ul className="grid gap-1.5">
-                {members.map((m) => (
-                  <li key={m.id} className="flex items-center gap-2.5 rounded-lg border border-border bg-card px-3 py-1.5">
-                    <Avatar name={m.name} size={22} />
-                    <span className="min-w-0 flex-1 truncate">
-                      {m.id === me?.id ? "You" : m.name}
-                    </span>
-                    <input
-                      type="number"
-                      step={mode === "shares" ? "1" : "0.01"}
-                      min="0"
-                      inputMode="decimal"
-                      autoComplete="off"
-                      aria-label={`${m.id === me?.id ? "Your" : `${m.name}'s`} ${mode === "amounts" ? "amount" : mode === "percent" ? "percentage" : "shares"}`}
-                      placeholder={mode === "amounts" ? "0.00" : mode === "percent" ? "0" : "0"}
-                      value={values[m.id] ?? ""}
-                      onChange={(e) => setValue(m.id, e.target.value)}
-                      className="h-8 w-20 shrink-0 border-0 bg-transparent text-right tabular-nums text-fg placeholder:text-muted-fg/60 focus-visible:outline-none"
-                    />
-                    <span className="w-12 shrink-0 text-right text-xs text-muted-fg">
-                      {mode === "amounts" ? currency : mode === "percent" ? "%" : "share(s)"}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              <>
+                <ul className="grid gap-1.5">
+                  {splitRows.map((m) => (
+                    <li key={m.id} className="flex items-center gap-2.5 rounded-lg border border-border bg-card px-3 py-1.5">
+                      <Avatar name={m.name} size={22} />
+                      <span className="min-w-0 flex-1 truncate">
+                        {m.id === me?.id ? "You" : m.name}
+                      </span>
+                      <input
+                        type="number"
+                        step={mode === "shares" ? "1" : "0.01"}
+                        min="0"
+                        inputMode="decimal"
+                        autoComplete="off"
+                        aria-label={`${m.id === me?.id ? "Your" : `${m.name}'s`} ${mode === "amounts" ? "amount" : mode === "percent" ? "percentage" : "shares"}`}
+                        placeholder={mode === "amounts" ? "0.00" : mode === "percent" ? "0" : "0"}
+                        value={values[m.id] ?? ""}
+                        onChange={(e) => setValue(m.id, e.target.value)}
+                        className="h-8 w-20 shrink-0 border-0 bg-transparent text-right tabular-nums text-fg placeholder:text-muted-fg/60 focus-visible:outline-none"
+                      />
+                      <span className="w-12 shrink-0 text-right text-xs text-muted-fg">
+                        {mode === "amounts" ? currency : mode === "percent" ? "%" : "share(s)"}
+                      </span>
+                      <button
+                        type="button"
+                        aria-label={`Remove ${m.id === me?.id ? "yourself" : m.name} from split`}
+                        disabled={splitSet.size <= 1}
+                        onClick={() => {
+                          const next = new Set(splitSet);
+                          next.delete(m.id);
+                          setSplitMembers(next);
+                        }}
+                        className="shrink-0 cursor-pointer px-0.5 text-sm text-muted-fg hover:text-destructive disabled:cursor-not-allowed disabled:opacity-30"
+                      >
+                        ✕
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                {splitRows.length < members.length && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {members
+                      .filter((m) => !splitSet.has(m.id))
+                      .map((m) => (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => {
+                            const next = new Set(splitSet);
+                            next.add(m.id);
+                            setSplitMembers(next);
+                          }}
+                          className="inline-flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-border bg-card px-3 text-sm text-fg transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
+                        >
+                          <Avatar name={m.name} size={20} />
+                          {m.id === me?.id ? "You" : m.name}
+                        </button>
+                      ))}
+                  </div>
+                )}
+              </>
             )}
             {!sameCurrency && mode === "amounts" && (
               <p className="text-xs text-muted-fg">

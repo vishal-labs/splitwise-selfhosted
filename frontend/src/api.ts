@@ -209,3 +209,6 @@ export const useActivity = (groupId: number | string) =>
     queryFn: () => getActivity(groupId),
     enabled: groupId !== 0,
   });
+
+export const deleteGroup = (id: number | string) =>
+  api<{ ok: boolean }>(`/groups/${id}`, { method: "DELETE" });
