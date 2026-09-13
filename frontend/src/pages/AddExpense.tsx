@@ -1,6 +1,13 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
-import { createExpense, uploadReceipt, useGroup, type Member } from "../api";
+import {
+  createExpense,
+  updateExpense,
+  uploadReceipt,
+  useGroup,
+  type Expense,
+  type Member,
+} from "../api";
 import { useMe } from "../App";
 import { Button } from "../components/Button";
 import { Input } from "../components/Input";
@@ -22,29 +29,42 @@ type Mode = (typeof MODES)[number]["id"];
 const selectClasses =
   "h-10 w-full rounded-lg border border-border bg-card px-3 text-fg focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring";
 
-/** Slide-over form to add an expense. Mounted conditionally (fresh state per open). */
-export default function AddExpense({ groupId, onClose }: { groupId: string; onClose: () => void }) {
+/** Slide-over form to add (or edit, when `expense` is given) an expense. Mounted conditionally (fresh state per open). */
+export default function AddExpense({
+  groupId,
+  expense,
+  onClose,
+}: {
+  groupId: string;
+  /** When set, the form is prefilled and submits a PATCH instead of a POST. */
+  expense?: Expense;
+  onClose: () => void;
+}) {
   const { data: me } = useMe();
   const { data: group } = useGroup(groupId);
   const queryClient = useQueryClient();
   const members: Member[] = group?.members ?? [];
 
-  const [amount, setAmount] = useState("");
-  const [description, setDescription] = useState("");
-  const [category, setCategory] = useState<string | null>(null);
-  const [payerId, setPayerId] = useState<number | null>(null);
+  const [amount, setAmount] = useState(
+    expense ? String((expense.converted_amount_minor ?? expense.amount_minor) / 100) : "",
+  );
+  const [description, setDescription] = useState(expense?.description ?? "");
+  const [category, setCategory] = useState<string | null>(expense?.category ?? null);
+  const [payerId, setPayerId] = useState<number | null>(expense?.payer_id ?? null);
   const [mode, setMode] = useState<Mode>("equal");
   const [included, setIncluded] = useState<Set<number> | null>(null);
   const [values, setValues] = useState<Record<number, string>>({});
-  const [currency, setCurrency] = useState<string>(group?.currency ?? "USD");
-  const [date, setDate] = useState("");
+  const [currency, setCurrency] = useState<string>(expense?.currency ?? group?.currency ?? "USD");
+  const [date, setDate] = useState(expense?.date ?? "");
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState("");
 
   const groupCurrency = group?.currency ?? "USD";
   const sameCurrency = currency === groupCurrency;
   const payer = payerId ?? me?.id ?? members[0]?.id ?? 0;
-  const includeSet = included ?? new Set(members.map((m) => m.id));
+  // ponytail: edits prefill as equal-split over the expense's split members; per-mode prefill not worth it
+  const includeSet =
+    included ?? new Set(expense ? expense.splits.map((s) => s.user_id) : members.map((m) => m.id));
   const amountMinor = Math.round((parseFloat(amount) || 0) * 100);
 
   const setValue = (id: number, v: string) => setValues((s) => ({ ...s, [id]: v }));
@@ -91,7 +111,7 @@ export default function AddExpense({ groupId, onClose }: { groupId: string; onCl
     return "";
   }
 
-  const create = useMutation({
+  const save = useMutation({
     mutationFn: async () => {
       const splits =
         mode === "equal"
@@ -101,7 +121,7 @@ export default function AddExpense({ groupId, onClose }: { groupId: string; onCl
               mode,
               value: mode === "amounts" ? (parseFloat(values[m.id] ?? "") || 0) : mode === "shares" ? parseInt(values[m.id] ?? "", 10) : (parseFloat(values[m.id] ?? "") || 0),
             }));
-      const expense = await createExpense(groupId, {
+      const body = {
         description: description.trim(),
         amount_minor: amountMinor,
         currency,
@@ -109,9 +129,12 @@ export default function AddExpense({ groupId, onClose }: { groupId: string; onCl
         splits,
         ...(date ? { date } : {}),
         ...(category ? { category } : {}),
-      });
-      if (file) await uploadReceipt(expense.id, file);
-      return expense;
+      };
+      const saved = expense
+        ? await updateExpense(expense.id, body)
+        : await createExpense(groupId, body);
+      if (file) await uploadReceipt(saved.id, file);
+      return saved;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["expenses", groupId] });
@@ -129,13 +152,13 @@ export default function AddExpense({ groupId, onClose }: { groupId: string; onCl
       return;
     }
     setError("");
-    create.mutate();
+    save.mutate();
   }
 
   const h = hint();
 
   return (
-    <Sheet open onClose={onClose} title="Add expense">
+    <Sheet open onClose={onClose} title={expense ? "Edit expense" : "Add expense"}>
       <form onSubmit={onSubmit} className="grid gap-4">
         <label className="grid gap-1.5 text-sm">
           Amount
@@ -279,8 +302,8 @@ export default function AddExpense({ groupId, onClose }: { groupId: string; onCl
           </p>
         )}
 
-        <Button type="submit" disabled={create.isPending}>
-          {create.isPending ? "Saving…" : "Add expense"}
+        <Button type="submit" disabled={save.isPending}>
+          {save.isPending ? "Saving…" : expense ? "Save changes" : "Add expense"}
         </Button>
       </form>
     </Sheet>

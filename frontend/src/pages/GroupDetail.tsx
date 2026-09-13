@@ -1,14 +1,17 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { useParams } from "react-router";
 import {
+  addComment,
   addMember,
   createSettlement,
   deleteExpense,
+  getComments,
   removeMember,
   useGroup,
   useGroupDebts,
   useGroupExpenses,
+  type Comment,
   type Debt,
   type Expense,
   type Member,
@@ -19,6 +22,7 @@ import { Button } from "../components/Button";
 import { Dialog } from "../components/Dialog";
 import { EmptyState } from "../components/EmptyState";
 import { Input } from "../components/Input";
+import { Sheet } from "../components/Sheet";
 import { Tabs } from "../components/Tabs";
 import { formatMinor } from "../format";
 import AddExpense from "./AddExpense";
@@ -33,39 +37,58 @@ function ExpenseRow({
   members,
   myId,
   myRole,
+  onEdit,
 }: {
   expense: Expense;
   members: Member[];
   myId: number;
   myRole: string;
+  onEdit: (e: Expense) => void;
 }) {
   const queryClient = useQueryClient();
   const [confirm, setConfirm] = useState(false);
+  const [detail, setDetail] = useState(false);
   const groupId = expense.group_id;
 
   const del = useMutation({
     mutationFn: () => deleteExpense(expense.id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["expenses", groupId] });
-      queryClient.invalidateQueries({ queryKey: ["debts", groupId] });
+      // route param is a string; keys must match useGroupExpenses/useGroupDebts or nothing refetches
+      queryClient.invalidateQueries({ queryKey: ["expenses", String(groupId)] });
+      queryClient.invalidateQueries({ queryKey: ["debts", String(groupId)] });
     },
   });
 
-  const canDelete = expense.created_by === myId || myRole === "admin";
+  const canEdit = expense.created_by === myId || myRole === "admin";
   const myShare = expense.splits.find((s) => s.user_id === myId)?.amount_minor ?? 0;
   const total = expense.converted_amount_minor ?? expense.amount_minor;
 
   return (
     <li className="flex items-center gap-3 px-1 py-3">
-      <div className="min-w-0 flex-1">
+      <button
+        type="button"
+        onClick={() => setDetail(true)}
+        className="min-w-0 flex-1 cursor-pointer text-left"
+        aria-label={`View ${expense.description}`}
+      >
         <p className="truncate font-medium">{expense.description}</p>
         <p className="text-sm text-muted-fg">
           {memberName(members, expense.payer_id)} paid · your share{" "}
           {formatMinor(myShare, expense.currency)}
         </p>
-      </div>
+      </button>
       <span className="font-medium">{formatMinor(total, expense.currency)}</span>
-      {canDelete &&
+      {canEdit && (
+        <Button
+          variant="ghost"
+          aria-label={`Edit ${expense.description}`}
+          className="h-8 px-2 text-sm text-muted-fg"
+          onClick={() => onEdit(expense)}
+        >
+          ✎
+        </Button>
+      )}
+      {canEdit &&
         (confirm ? (
           <span className="flex items-center gap-1">
             <Button
@@ -90,7 +113,124 @@ function ExpenseRow({
             ✕
           </Button>
         ))}
+      {detail && <ExpenseDetail expense={expense} members={members} onClose={() => setDetail(false)} />}
     </li>
+  );
+}
+
+function ExpenseDetail({
+  expense,
+  members,
+  onClose,
+}: {
+  expense: Expense;
+  members: Member[];
+  onClose: () => void;
+}) {
+  const { data: comments, isPending } = useQuery({
+    queryKey: ["comments", expense.id],
+    queryFn: () => getComments(expense.id),
+  });
+  const queryClient = useQueryClient();
+  const [body, setBody] = useState("");
+  const [error, setError] = useState("");
+
+  const add = useMutation({
+    mutationFn: () => addComment(expense.id, body.trim()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["comments", expense.id] });
+      setBody("");
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : "Something went wrong"),
+  });
+
+  function onSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!body.trim()) return;
+    setError("");
+    add.mutate();
+  }
+
+  const total = expense.converted_amount_minor ?? expense.amount_minor;
+
+  return (
+    <Sheet open onClose={onClose} title={expense.description}>
+      <div className="grid gap-5">
+        <p className="text-sm text-muted-fg">
+          {memberName(members, expense.payer_id)} paid {formatMinor(total, expense.currency)}
+          {expense.category ? ` · ${expense.category}` : ""} · {expense.date}
+        </p>
+
+        <div className="grid gap-1 text-sm">
+          <h3 className="font-medium">Splits</h3>
+          <ul className="grid gap-1">
+            {expense.splits.map((s) => (
+              <li key={s.user_id} className="flex justify-between">
+                <span>{memberName(members, s.user_id)}</span>
+                <span>{formatMinor(s.amount_minor, expense.currency)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <Receipt expenseId={expense.id} />
+
+        <div className="grid gap-2 text-sm">
+          <h3 className="font-medium">Comments</h3>
+          {isPending ? (
+            <p className="text-muted-fg">Loading…</p>
+          ) : !comments || comments.length === 0 ? (
+            <p className="text-muted-fg">No comments yet.</p>
+          ) : (
+            <ul className="grid gap-2">
+              {comments.map((c: Comment) => (
+                <li key={c.id} className="rounded-card border border-border bg-card px-3 py-2">
+                  <p>{c.body}</p>
+                  <p className="text-xs text-muted-fg">
+                    {memberName(members, c.user_id)} · {new Date(c.created_at).toLocaleString()}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+          <form onSubmit={onSubmit} className="flex gap-2">
+            <Input
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder="Add a comment…"
+              maxLength={2000}
+              aria-label="Add a comment"
+            />
+            <Button type="submit" disabled={add.isPending || !body.trim()}>
+              {add.isPending ? "…" : "Post"}
+            </Button>
+          </form>
+          {error && (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          )}
+        </div>
+      </div>
+    </Sheet>
+  );
+}
+
+/** Receipt image; 404 (no receipt) renders nothing. */
+function Receipt({ expenseId }: { expenseId: number }) {
+  const [error, setError] = useState(false);
+  if (error) return null;
+  return (
+    <div className="grid gap-1 text-sm">
+      <h3 className="font-medium">Receipt</h3>
+      {/* fetch with cookie session via credentials: include */}
+      <img
+        src={`/api/expenses/${expenseId}/receipt`}
+        alt="Receipt"
+        className="max-h-72 rounded-card border border-border object-contain"
+        onError={() => setError(true)}
+      />
+    </div>
   );
 }
 
@@ -98,10 +238,12 @@ function ExpensesTab({
   groupId,
   myId,
   myRole,
+  onEdit,
 }: {
   groupId: string;
   myId: number;
   myRole: string;
+  onEdit: (e: Expense) => void;
 }) {
   const { data: group } = useGroup(groupId);
   const { data: expenses, isPending } = useGroupExpenses(groupId);
@@ -137,6 +279,7 @@ function ExpensesTab({
                 members={members ?? []}
                 myId={myId}
                 myRole={myRole}
+                onEdit={onEdit}
               />
             ))}
           </ul>
@@ -158,6 +301,7 @@ function SettleUpDialog({
   onClose: () => void;
 }) {
   const { data: group } = useGroup(groupId);
+  const { data: me } = useMe();
   const queryClient = useQueryClient();
   const [error, setError] = useState("");
 
@@ -205,19 +349,15 @@ function SettleUpDialog({
           </select>
         </label>
         <label className="grid gap-1.5 text-sm">
-          Payee
-          <select
-            name="payee_id"
-            defaultValue={initial?.to ?? group?.members[0]?.id}
-            className="h-10 rounded-lg border border-border bg-card px-3 focus-visible:outline-2 focus-visible:outline-ring"
-            required
-          >
-            {group?.members.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </select>
+          Payee <span className="text-muted-fg">(you)</span>
+          {/* payee is fixed to the logged-in user */}
+          <input type="hidden" name="payee_id" value={me?.id ?? ""} />
+          <input
+            className="h-10 rounded-lg border border-border bg-muted px-3 text-muted-fg"
+            value={me ? "You" : ""}
+            readOnly
+            aria-label="Payee"
+          />
         </label>
         <label className="grid gap-1.5 text-sm">
           Amount ({currency})
@@ -339,11 +479,24 @@ export default function GroupDetail() {
   const [tab, setTab] = useState("expenses");
   const [addOpen, setAddOpen] = useState(false);
   const [expenseOpen, setExpenseOpen] = useState(false);
+  const [editing, setEditing] = useState<Expense | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const leave = useMutation({
     mutationFn: (userId: number) => removeMember(id, userId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["groups"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["groups"] });
+      queryClient.invalidateQueries({ queryKey: ["group", id] });
+      queryClient.invalidateQueries({ queryKey: ["expenses", id] });
+      queryClient.invalidateQueries({ queryKey: ["debts", id] });
+    },
   });
+
+  async function copyInvite() {
+    await navigator.clipboard.writeText(`${location.origin}/join/${group?.invite_code ?? ""}`);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
 
   if (isPending) return <p className="text-muted-fg">Loading…</p>;
   if (error || !group)
@@ -363,6 +516,9 @@ export default function GroupDetail() {
           <Button variant="secondary" onClick={() => setAddOpen(true)}>
             Add member
           </Button>
+          <Button variant="ghost" onClick={copyInvite}>
+            {copied ? "Copied ✓" : "Copy invite"}
+          </Button>
         </div>
       </div>
 
@@ -375,6 +531,15 @@ export default function GroupDetail() {
             <Avatar name={m.name} size={24} />
             {m.name}
             {m.role === "admin" && <span className="text-xs text-muted-fg">admin</span>}
+            {myMembership?.role === "admin" && m.id !== me?.id && group.members.length > 1 && (
+              <button
+                aria-label={`Remove ${m.name}`}
+                className="cursor-pointer text-xs text-muted-fg hover:text-destructive"
+                onClick={() => leave.mutate(m.id)}
+              >
+                ✕
+              </button>
+            )}
             {me && m.id === me.id && group.members.length > 1 && (
               <button
                 aria-label="Leave group"
@@ -401,7 +566,12 @@ export default function GroupDetail() {
 
       <div className="mt-4">
         {tab === "expenses" ? (
-          <ExpensesTab groupId={id} myId={me?.id ?? -1} myRole={myMembership?.role ?? "member"} />
+          <ExpensesTab
+            groupId={id}
+            myId={me?.id ?? -1}
+            myRole={myMembership?.role ?? "member"}
+            onEdit={setEditing}
+          />
         ) : (
           <BalancesTab groupId={id} />
         )}
@@ -409,6 +579,7 @@ export default function GroupDetail() {
 
       <AddMemberDialog groupId={id} open={addOpen} onClose={() => setAddOpen(false)} />
       {expenseOpen && <AddExpense groupId={id} onClose={() => setExpenseOpen(false)} />}
+      {editing && <AddExpense groupId={id} expense={editing} onClose={() => setEditing(null)} />}
     </div>
   );
 }

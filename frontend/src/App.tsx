@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Navigate, NavLink, Outlet, Route, Routes, useNavigate } from "react-router";
-import { api, getMe } from "./api";
+import { useEffect, useState } from "react";
+import { Navigate, NavLink, Outlet, Route, Routes, useNavigate, useParams } from "react-router";
+import { api, getMe, joinGroup } from "./api";
 import { Avatar } from "./components/Avatar";
 import { Button } from "./components/Button";
 import Login from "./pages/Login";
@@ -102,6 +103,26 @@ function Shell() {
   );
 }
 
+/** Joins via invite code, then navigates to the group. Mounted inside RequireAuth (401 → /login). */
+function JoinGroup() {
+  const { code = "" } = useParams();
+  const navigate = useNavigate();
+  const [error, setError] = useState("");
+
+  const join = useMutation({
+    mutationFn: () => joinGroup(code),
+    onSuccess: (group) => navigate(`/groups/${group.id}`, { replace: true }),
+    onError: (e) => setError(e instanceof Error ? e.message : "Could not join group"),
+    // ponytail: fire-on-mount join; retry UI not worth it — user can revisit the link
+  });
+  useEffect(() => {
+    join.mutate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return <p className="text-muted-fg">{error || "Joining…"}</p>;
+}
+
 export default function App() {
   return (
     <Routes>
@@ -110,6 +131,7 @@ export default function App() {
       <Route element={<RequireAuth />}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/groups/:id" element={<GroupDetail />} />
+        <Route path="/join/:code" element={<JoinGroup />} />
         <Route path="/activity" element={<Activity />} />
         <Route path="/analytics" element={<Analytics />} />
         <Route path="/settings" element={<Settings />} />

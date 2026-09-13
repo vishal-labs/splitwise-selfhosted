@@ -96,6 +96,27 @@ export const addMember = (groupId: number | string, email: string) =>
 export const removeMember = (groupId: number | string, userId: number) =>
   api(`/groups/${groupId}/members/${userId}`, { method: "DELETE" });
 export const deleteExpense = (id: number) => api(`/expenses/${id}`, { method: "DELETE" });
+export const updateExpense = (
+  id: number,
+  body: {
+    description: string;
+    amount_minor: number;
+    currency: string;
+    payer_id: number;
+    splits: SplitInput[];
+    date?: string;
+    category?: string;
+  },
+) => api<Expense>(`/expenses/${id}`, { method: "PATCH", body });
+export const joinGroup = (code: string) => api<Group>(`/groups/join/${code}`, { method: "POST" });
+
+// --- Comments ---
+
+export type Comment = { id: number; user_id: number; body: string; created_at: string };
+
+export const getComments = (expenseId: number) => api<Comment[]>(`/expenses/${expenseId}/comments`);
+export const addComment = (expenseId: number, body: string) =>
+  api<Comment>(`/expenses/${expenseId}/comments`, { body: { body } });
 
 export const useGroups = () => useQuery({ queryKey: ["groups"], queryFn: listGroups });
 export const useGroup = (id: number | string) =>
