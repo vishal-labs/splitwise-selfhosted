@@ -8,6 +8,7 @@ from app.activity import log_activity
 from app.auth import get_current_user, get_db
 from app.models import Group, Membership, User
 from app.schemas import GroupCreate, GroupDetail, GroupOut, MemberAdd, MemberOut
+from app.services.balances import group_net_balances
 
 router = APIRouter(prefix="/api/groups", tags=["groups"])
 
@@ -185,6 +186,20 @@ async def remove_member(
     )
     if m is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not a member")
+    # last-admin guard: group would be left without an admin
+    if m.role == "admin":
+        counts = await db.execute(
+            select(Membership.role, func.count())
+            .where(Membership.group_id == group.id)
+            .group_by(Membership.role)
+        )
+        by_role = dict(counts.all())
+        if by_role.get("admin", 0) == 1 and sum(by_role.values()) > 1:
+            raise HTTPException(status.HTTP_409_CONFLICT, "Last admin can't leave")
+    # debt guard: departing member must be square
+    balances = await group_net_balances(db, group.id)
+    if balances.get(user_id, 0) != 0:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Settle up before leaving")
     await db.delete(m)
     await log_activity(
         db, group.id, user_id, "left" if user_id == me.user_id else "removed", target_id=user_id

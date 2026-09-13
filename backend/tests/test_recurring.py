@@ -28,8 +28,8 @@ async def db(client):
         yield s
 
 
-async def _setup_rule(client, db, *, freq: str, day: int, next_run: dt.date) -> tuple[int, int, int]:
-    """Create group + equal-split expense, link rule to it. Returns (rule_id, a, b)."""
+async def _setup_rule(client, db, *, freq: str, day: int, next_run: dt.date) -> tuple[int, int, int, int]:
+    """Create group + equal-split expense, link rule to it. Returns (rule_id, group_id, a, b)."""
     client.cookies.clear()
     await client.post(
         "/api/users/register",
@@ -77,7 +77,7 @@ async def _setup_rule(client, db, *, freq: str, day: int, next_run: dt.date) -> 
     expense = await db.get(Expense, expense_id)
     expense.recurring_rule_id = rule.id
     await db.commit()
-    return rule.id, a, b
+    return rule.id, group_id, a, b
 
 
 # --- advance ---
@@ -105,7 +105,7 @@ def test_advance_yearly_clamps_feb29():
 
 
 async def test_materialize_due_creates_expense(client, db):
-    rule_id, a, b = await _setup_rule(
+    rule_id, _, a, b = await _setup_rule(
         client, db, freq="monthly", day=31, next_run=dt.date(2026, 9, 1)  # past (today: 2026-09-13)
     )
     materialize_due = _materialize_due()
@@ -135,7 +135,7 @@ async def test_materialize_due_creates_expense(client, db):
 
 
 async def test_materialize_due_future_rule_skipped(client, db):
-    rule_id, _, _ = await _setup_rule(
+    rule_id, _, _, _ = await _setup_rule(
         client, db, freq="monthly", day=15, next_run=dt.date(2026, 10, 1)  # future
     )
     materialize_due = _materialize_due()
@@ -149,3 +149,52 @@ async def test_materialize_due_future_rule_skipped(client, db):
         await db.scalars(select(Expense).where(Expense.recurring_rule_id == rule_id))
     ).all()
     assert len(expenses) == 1  # only the original
+
+
+# --- cancel rule ---
+
+
+async def test_cancel_recurring_rule(client, db):
+    from sqlalchemy import select
+
+    from app.models import RecurringRule
+
+    rule_id, group_id, _, _ = await _setup_rule(
+        client, db, freq="monthly", day=15, next_run=dt.date(2026, 10, 1)
+    )
+
+    # non-member → 404
+    client.cookies.clear()
+    await client.post(
+        "/api/users/register",
+        json={"email": "c@b.com", "name": "c", "password": "hunter2hunter"},
+    )
+    r = await client.delete(f"/api/groups/{group_id}/recurring/{rule_id}")
+    assert r.status_code == 404
+
+    # member cancels → 200; rule gone so materialization stops
+    client.cookies.clear()
+    await client.post("/api/users/login", json={"email": "a@b.com", "password": "hunter2hunter"})
+    r = await client.delete(f"/api/groups/{group_id}/recurring/{rule_id}")
+    assert r.status_code == 200
+    rule = await db.get(RecurringRule, rule_id)
+    assert rule is None
+
+    # second delete → 404
+    r = await client.delete(f"/api/groups/{group_id}/recurring/{rule_id}")
+    assert r.status_code == 404
+
+
+async def test_cancel_rule_from_other_group_404(client, db):
+    from sqlalchemy import select
+
+    from app.models import RecurringRule
+
+    rule_id, group_id, a, _ = await _setup_rule(
+        client, db, freq="monthly", day=15, next_run=dt.date(2026, 10, 1)
+    )
+    r = await client.post("/api/groups", json={"name": "Other", "currency": "USD"})
+    other_id = r.json()["id"]
+    r = await client.delete(f"/api/groups/{other_id}/recurring/{rule_id}")
+    assert r.status_code == 404
+    assert await db.get(RecurringRule, rule_id) is not None

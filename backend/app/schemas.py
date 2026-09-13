@@ -98,6 +98,7 @@ class ExpenseOut(BaseModel):
     date: Date
     category: str | None
     splits: list[SplitOut]
+    recurring_rule_id: int | None = None
 
 
 class SettlementCreate(BaseModel):

@@ -1,5 +1,10 @@
 """Net balances and greedy simplified debts. All amounts in group base currency."""
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models import Expense, ExpenseSplit, Settlement
+
 # expense rows: (payer_id, converted_amount_minor, [(user_id, amount_minor), ...])
 # settlement rows: (payer_id, payee_id, amount_minor)
 
@@ -14,6 +19,24 @@ def net_balances(expenses: list, settlements: list) -> dict[int, int]:
         balances[payer_id] = balances.get(payer_id, 0) + amount
         balances[payee_id] = balances.get(payee_id, 0) - amount
     return balances
+
+
+async def group_net_balances(db: AsyncSession, group_id: int) -> dict[int, int]:
+    """Build expense + settlement rows from the DB, then net_balances."""
+    exp_rows = []
+    for e in (await db.scalars(select(Expense).where(Expense.group_id == group_id))).all():
+        total = e.converted_amount_minor if e.converted_amount_minor is not None else e.amount_minor
+        splits = (
+            await db.scalars(select(ExpenseSplit).where(ExpenseSplit.expense_id == e.id))
+        ).all()
+        exp_rows.append((e.payer_id, total, [(s.user_id, s.amount_minor) for s in splits]))
+    settle_rows = (
+        await db.execute(
+            select(Settlement.payer_id, Settlement.payee_id, Settlement.amount_minor)
+            .where(Settlement.group_id == group_id)
+        )
+    ).all()
+    return net_balances(exp_rows, settle_rows)
 
 
 def simplify_debts(balances: dict[int, int]) -> list[tuple[int, int, int]]:

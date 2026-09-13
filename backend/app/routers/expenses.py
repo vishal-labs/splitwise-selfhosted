@@ -1,7 +1,7 @@
 import datetime as dt
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.activity import log_activity
@@ -9,7 +9,7 @@ from app.auth import get_current_user, get_db
 from app.models import Expense, ExpenseSplit, Group, Membership, RecurringRule, Settlement, User
 from app.routers.groups import get_group_member
 from app.schemas import DebtOut, ExpenseCreate, ExpenseOut, SplitOut
-from app.services.balances import net_balances, simplify_debts
+from app.services.balances import group_net_balances, simplify_debts
 from app.services.money import convert, split_minor, split_weighted
 from app.services.rates import get_rate
 
@@ -113,6 +113,7 @@ async def create_expense(
         date=expense.date,
         category=expense.category,
         splits=[SplitOut(user_id=s.user_id, amount_minor=a) for s, a in zip(payload.splits, amounts)],
+        recurring_rule_id=expense.recurring_rule_id,
     )
 
 
@@ -151,6 +152,7 @@ async def list_expenses(
                 date=e.date,
                 category=e.category,
                 splits=[SplitOut(user_id=s.user_id, amount_minor=s.amount_minor) for s in splits],
+                recurring_rule_id=e.recurring_rule_id,
             )
         )
     return out
@@ -163,25 +165,7 @@ async def get_debts(
     pair: tuple = Depends(get_group_member),
 ):
     group, _ = pair
-    expenses = (
-        await db.scalars(select(Expense).where(Expense.group_id == group.id))
-    ).all()
-    exp_rows = []
-    for e in expenses:
-        total = e.converted_amount_minor if e.converted_amount_minor is not None else e.amount_minor
-        splits = (
-            await db.scalars(
-                select(ExpenseSplit).where(ExpenseSplit.expense_id == e.id)
-            )
-        ).all()
-        exp_rows.append((e.payer_id, total, [(s.user_id, s.amount_minor) for s in splits]))
-    settle_rows = (
-        await db.execute(
-            select(Settlement.payer_id, Settlement.payee_id, Settlement.amount_minor)
-            .where(Settlement.group_id == group.id)
-        )
-    ).all()
-    balances = net_balances(exp_rows, settle_rows)
+    balances = await group_net_balances(db, group.id)
     return [
         DebtOut(from_user=f, to_user=t, amount_minor=a) for f, t, a in simplify_debts(balances)
     ]
@@ -260,6 +244,7 @@ async def edit_expense(
         date=expense.date,
         category=expense.category,
         splits=[SplitOut(user_id=s.user_id, amount_minor=a) for s, a in zip(payload.splits, amounts)],
+        recurring_rule_id=expense.recurring_rule_id,
     )
 
 
@@ -289,5 +274,24 @@ async def delete_expense(
     await log_activity(
         db, expense.group_id, user.id, "expense_deleted", target_id=expense_id
     )
+    await db.commit()
+    return {"ok": True}
+
+
+@router.delete("/groups/{group_id}/recurring/{rule_id}")
+async def cancel_recurring(
+    group_id: int,
+    rule_id: int,
+    me: tuple = Depends(get_group_member),
+    db: AsyncSession = Depends(get_db),
+):
+    group, _ = me
+    rule = await db.get(RecurringRule, rule_id)
+    if rule is None or rule.group_id != group.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND)
+    # ponytail: FK from expenses — clear refs, badge disappears on past rows too
+    await db.execute(update(Expense).where(Expense.recurring_rule_id == rule_id).values(recurring_rule_id=None))
+    await db.delete(rule)
+    await log_activity(db, group.id, _.user_id, "recurring_cancelled", target_id=rule_id)
     await db.commit()
     return {"ok": True}

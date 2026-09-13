@@ -362,6 +362,34 @@ async def test_edit_expense_permissions_and_recompute(client):
     assert debts[0] == {"from": a, "to": b, "amount": 1000}
 
 
+async def test_expense_out_includes_recurring_rule_id(client):
+    group_id, a, b, _ = await _setup_group(client)
+    payload = {
+        "description": "Rent",
+        "amount_minor": 1000,
+        "currency": "USD",
+        "payer_id": a,
+        "splits": [
+            {"user_id": a, "mode": "equal", "value": None},
+            {"user_id": b, "mode": "equal", "value": None},
+        ],
+    }
+    r = await client.post(f"/api/groups/{group_id}/expenses", json=payload)
+    assert r.status_code == 200
+    assert r.json()["recurring_rule_id"] is None
+
+    r = await client.post(
+        f"/api/groups/{group_id}/expenses", json={**payload, "recurring": {"freq": "monthly", "day": 15}}
+    )
+    assert r.status_code == 200, r.text
+    rule_id = r.json()["recurring_rule_id"]
+    assert isinstance(rule_id, int)
+
+    r = await client.get(f"/api/groups/{group_id}/expenses")
+    ids = {e["id"]: e["recurring_rule_id"] for e in r.json()}
+    assert set(ids.values()) == {None, rule_id}
+
+
 async def test_activity_logged_on_expense(client):
     from sqlalchemy import select
 

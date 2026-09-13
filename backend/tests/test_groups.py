@@ -116,6 +116,75 @@ async def test_leave_group(client):
     assert r.status_code == 404
 
 
+async def test_debt_guard_on_removal_and_leave(client):
+    token_a = await _register(client, "a@b.com")
+    r = await client.post("/api/groups", json={"name": "Trip", "currency": "USD"})
+    group_id = r.json()["id"]
+    token_b = await _register(client, "b@b.com")
+    await _switch(client, token_a)
+    await client.post(f"/api/groups/{group_id}/members", json={"email": "b@b.com"})
+    r = await client.get(f"/api/groups/{group_id}")
+    members = {m["email"]: m["id"] for m in r.json()["members"]}
+    a, b = members["a@b.com"], members["b@b.com"]
+
+    # a paid, b owes 500
+    r = await client.post(
+        f"/api/groups/{group_id}/expenses",
+        json={
+            "description": "Dinner",
+            "amount_minor": 1000,
+            "currency": "USD",
+            "payer_id": a,
+            "splits": [
+                {"user_id": a, "mode": "equal", "value": None},
+                {"user_id": b, "mode": "equal", "value": None},
+            ],
+        },
+    )
+    assert r.status_code == 200
+
+    # admin removes indebted b → 409
+    r = await client.delete(f"/api/groups/{group_id}/members/{b}")
+    assert r.status_code == 409
+    assert "Settle up" in r.json()["detail"]
+
+    # b can't self-leave either
+    await _switch(client, token_b)
+    r = await client.delete(f"/api/groups/{group_id}/members/{b}")
+    assert r.status_code == 409
+
+    # settle up → removal succeeds
+    r = await client.post(
+        f"/api/groups/{group_id}/settlements",
+        json={"payer_id": b, "payee_id": a, "amount_minor": 500, "currency": "USD"},
+    )
+    assert r.status_code == 200
+    r = await client.delete(f"/api/groups/{group_id}/members/{b}")
+    assert r.status_code == 200
+
+
+async def test_last_admin_cannot_leave(client):
+    token_a = await _register(client, "a@b.com")
+    r = await client.post("/api/groups", json={"name": "Trip", "currency": "USD"})
+    group_id = r.json()["id"]
+    token_b = await _register(client, "b@b.com")
+    await _switch(client, token_a)
+    await client.post(f"/api/groups/{group_id}/members", json={"email": "b@b.com"})
+    r = await client.get(f"/api/groups/{group_id}")
+    members = {m["email"]: m["id"] for m in r.json()["members"]}
+    a, b = members["a@b.com"], members["b@b.com"]
+
+    # a is the only admin → 409
+    r = await client.delete(f"/api/groups/{group_id}/members/{a}")
+    assert r.status_code == 409
+    assert "Last admin" in r.json()["detail"]
+
+    # b (plain member, zero balance) can still leave
+    await _switch(client, token_b)
+    r = await client.delete(f"/api/groups/{group_id}/members/{b}")
+    assert r.status_code == 200
+
+
 async def test_activity_logged(client):
     from sqlalchemy import select
 
