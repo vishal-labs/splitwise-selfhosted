@@ -31,7 +31,7 @@ export function Dialog({ open, onClose, title, children, className, bodyClassNam
         // light dismiss: click landed on the backdrop (the dialog element itself)
         if (e.target === ref.current) ref.current.close();
       }}
-      className={`m-auto w-[min(28rem,calc(100vw-2rem))] rounded-card bg-card p-0 text-fg shadow-xl backdrop:bg-black/50 ${className ?? ""}`}
+      className={`dialog-sheet m-auto w-[min(28rem,calc(100vw-2rem))] rounded-card bg-card p-0 text-fg shadow-xl backdrop:bg-black/50 ${className ?? ""}`}
     >
       <div className="flex items-center justify-between border-b border-border px-5 py-4">
         <h2 className="font-semibold">{title}</h2>

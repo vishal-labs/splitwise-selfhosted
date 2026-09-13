@@ -74,7 +74,7 @@ function ExpenseRow({
   const total = expense.converted_amount_minor ?? expense.amount_minor;
 
   return (
-    <li className="flex items-center gap-3 px-1 py-3">
+    <li className="flex items-center gap-2 px-1 py-3">
       <button
         type="button"
         onClick={() => setDetail(true)}
@@ -82,12 +82,13 @@ function ExpenseRow({
         aria-label={`View ${expense.description}`}
       >
         <p className="truncate font-medium">{expense.description}</p>
-        <p className="text-sm text-muted-fg">
+        <p className="truncate text-sm text-muted-fg">
           {memberName(members, expense.payer_id)} paid · your share{" "}
           {formatMinor(myShare, expense.currency)}
         </p>
       </button>
-      <span className="font-medium">{formatMinor(total, expense.currency)}</span>
+      <span className="shrink-0 font-medium tabular-nums">{formatMinor(total, expense.currency)}</span>
+      <span className="flex shrink-0 items-center gap-0.5">
       {expense.recurring_rule_id != null &&
         (canEdit ? (
           ruleConfirm ? (
@@ -107,8 +108,9 @@ function ExpenseRow({
           ) : (
             <Button
               variant="ghost"
+              size="icon"
               aria-label="Cancel recurring rule"
-              className="h-8 px-2 text-sm"
+              className="h-8 text-sm"
               onClick={() => setRuleConfirm(true)}
             >
               🔁
@@ -122,8 +124,9 @@ function ExpenseRow({
       {canEdit && (
         <Button
           variant="ghost"
+          size="icon"
           aria-label={`Edit ${expense.description}`}
-          className="h-8 px-2 text-sm text-muted-fg"
+          className="h-8 text-sm text-muted-fg"
           onClick={() => onEdit(expense)}
         >
           ✎
@@ -147,13 +150,15 @@ function ExpenseRow({
         ) : (
           <Button
             variant="ghost"
+            size="icon"
             aria-label={`Delete ${expense.description}`}
-            className="h-8 px-2 text-sm text-muted-fg"
+            className="h-8 text-sm text-muted-fg"
             onClick={() => setConfirm(true)}
           >
             ✕
           </Button>
         ))}
+      </span>
       {detail && <ExpenseDetail expense={expense} members={members} onClose={() => setDetail(false)} />}
     </li>
   );
@@ -318,7 +323,7 @@ function ExpensesTab({
   return (
     <div className="grid gap-6">
       {[...byDate.entries()].map(([date, list]) => (
-        <section key={date}>
+        <section key={date} className="min-w-0">
           <h3 className="text-sm font-medium text-muted-fg">{date}</h3>
           <ul className="divide-y divide-border">
             {list.map((e) => (
@@ -559,18 +564,23 @@ export default function GroupDetail() {
 
   return (
     <div>
-      <div className="flex items-start justify-between gap-4">
-        <div>
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold">{group.name}</h1>
           <p className="text-sm text-muted-fg">{group.currency}</p>
         </div>
-        <div className="flex gap-2">
-          <Button onClick={() => setExpenseOpen(true)}>Add expense</Button>
-          <Button variant="secondary" onClick={() => setAddOpen(true)}>
-            Add member
+        <div className="flex flex-1 justify-end gap-2 max-sm:w-full">
+          <Button onClick={() => setExpenseOpen(true)} className="max-sm:flex-1">
+            Add expense
           </Button>
-          <Button variant="ghost" onClick={copyInvite}>
-            {copied ? "Copied ✓" : "Copy code"}
+          <Button variant="secondary" onClick={() => setAddOpen(true)} aria-label="Add member" className="max-sm:h-10 max-sm:w-10 max-sm:px-0 max-sm:text-lg">
+            <span className="max-sm:hidden">Add member</span>
+            <span className="max-sm:inline hidden" aria-hidden="true">
+              +
+            </span>
+          </Button>
+          <Button variant="ghost" onClick={copyInvite} aria-label="Copy invite code" className="max-sm:h-10 max-sm:w-10 max-sm:px-0">
+            {copied ? "✓" : "⧉"}
           </Button>
         </div>
       </div>
