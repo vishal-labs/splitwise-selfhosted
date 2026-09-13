@@ -57,6 +57,37 @@ async def create_group(
     )
 
 
+@router.post("/join/{code}", response_model=GroupOut)
+async def join_by_invite(
+    code: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    group = await db.scalar(select(Group).where(Group.invite_code == code))
+    if group is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND)
+    existing = await db.scalar(
+        select(Membership).where(
+            Membership.group_id == group.id, Membership.user_id == user.id
+        )
+    )
+    if existing is None:
+        db.add(Membership(group_id=group.id, user_id=user.id, role="member"))
+        await log_activity(db, group.id, user.id, "joined", target_id=group.id)
+        await db.commit()
+    count = await db.scalar(
+        select(func.count()).select_from(Membership).where(Membership.group_id == group.id)
+    )
+    return GroupOut(
+        id=group.id,
+        name=group.name,
+        currency=group.currency,
+        created_by=group.created_by,
+        invite_code=group.invite_code,
+        member_count=count or 1,
+    )
+
+
 @router.get("")
 async def list_groups(
     user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)

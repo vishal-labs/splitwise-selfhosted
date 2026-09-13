@@ -137,3 +137,31 @@ async def test_activity_logged(client):
         )
     assert "created_group" in verbs
     assert "joined" in verbs
+
+
+async def test_join_by_invite(client):
+    from httpx import Cookies
+
+    r = await client.post(
+        "/api/users/register",
+        json={"email": "a@b.com", "name": "a", "password": "hunter2hunter"},
+    )
+    tok_a = r.cookies["session"]
+    r = await client.post("/api/groups", json={"name": "T", "currency": "USD"})
+    code = r.json()["invite_code"]
+
+    jar = Cookies()
+    await client.post(
+        "/api/users/register",
+        json={"email": "b@b.com", "name": "b", "password": "hunter2hunter"},
+    )
+    tok_b = client.cookies["session"]
+    jar.set("session", tok_b)
+    client.cookies = jar
+
+    r = await client.post(f"/api/groups/join/{code}")
+    assert r.status_code == 200
+    assert r.json()["member_count"] == 2
+
+    r = await client.post("/api/groups/join/badcode")
+    assert r.status_code == 404
