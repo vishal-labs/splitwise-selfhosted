@@ -334,30 +334,32 @@ function SettleUpDialog({
     <Dialog open onClose={onClose} title="Settle up">
       <form onSubmit={onSubmit} className="grid gap-4">
         <label className="grid gap-1.5 text-sm">
-          Payer
-          <select
-            name="payer_id"
-            defaultValue={initial?.from ?? group?.members[0]?.id}
-            className="h-10 rounded-lg border border-border bg-card px-3 focus-visible:outline-2 focus-visible:outline-ring"
-            required
-          >
-            {group?.members.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="grid gap-1.5 text-sm">
-          Payee <span className="text-muted-fg">(you)</span>
-          {/* payee is fixed to the logged-in user */}
-          <input type="hidden" name="payee_id" value={me?.id ?? ""} />
+          Payer <span className="text-muted-fg">(you)</span>
+          {/* payer is fixed to the logged-in user */}
+          <input type="hidden" name="payer_id" value={me?.id ?? ""} />
           <input
             className="h-10 rounded-lg border border-border bg-muted px-3 text-muted-fg"
             value={me ? "You" : ""}
             readOnly
-            aria-label="Payee"
+            aria-label="Payer"
           />
+        </label>
+        <label className="grid gap-1.5 text-sm">
+          Payee
+          <select
+            name="payee_id"
+            defaultValue={initial?.from === me?.id ? initial.to : group?.members.find((m) => m.id !== me?.id)?.id}
+            className="h-10 rounded-lg border border-border bg-card px-3 focus-visible:outline-2 focus-visible:outline-ring"
+            required
+          >
+            {group?.members
+              .filter((m) => m.id !== me?.id)
+              .map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+          </select>
         </label>
         <label className="grid gap-1.5 text-sm">
           Amount ({currency})
