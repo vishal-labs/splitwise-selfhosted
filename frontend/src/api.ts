@@ -139,3 +139,37 @@ export const createSettlement = (
   groupId: number | string,
   body: { payer_id: number; payee_id: number; amount_minor: number; currency: string },
 ) => api(`/groups/${groupId}/settlements`, { body });
+
+// --- Task 12: analytics + activity (appended to minimize merge conflict) ---
+
+export type Analytics = {
+  monthly: { month: string; total: number }[];
+  by_category: { category: string; total: number }[];
+};
+
+export type ActivityItem = {
+  id: number;
+  user_id: number;
+  user_name: string;
+  verb: string;
+  target_id: number | null;
+  created_at: string;
+};
+
+export const getAnalytics = (groupId: number | string, months: number) =>
+  api<Analytics>(`/groups/${groupId}/analytics?months=${months}`);
+export const getActivity = (groupId: number | string) =>
+  api<ActivityItem[]>(`/groups/${groupId}/activity`);
+
+export const useAnalytics = (groupId: number | string, months: number) =>
+  useQuery({
+    queryKey: ["analytics", groupId, months],
+    queryFn: () => getAnalytics(groupId, months),
+    enabled: groupId !== 0,
+  });
+export const useActivity = (groupId: number | string) =>
+  useQuery({
+    queryKey: ["activity", groupId],
+    queryFn: () => getActivity(groupId),
+    enabled: groupId !== 0,
+  });

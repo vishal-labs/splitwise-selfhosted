@@ -7,20 +7,13 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import GroupDetail from "./pages/GroupDetail";
+import Analytics from "./pages/Analytics";
+import Activity from "./pages/Activity";
+import Settings from "./pages/Settings";
 
 /** Current session query. */
 export function useMe() {
   return useQuery({ queryKey: ["me"], queryFn: getMe });
-}
-
-// Placeholder pages — real implementations land in Tasks 10–12.
-function Placeholder({ name }: { name: string }) {
-  return (
-    <div>
-      <h1 className="text-2xl font-semibold">{name}</h1>
-      <p className="mt-2 text-muted-fg">Coming in a later task.</p>
-    </div>
-  );
 }
 
 /** Redirects to /login unless a session exists; renders the app shell. */
@@ -117,9 +110,9 @@ export default function App() {
       <Route element={<RequireAuth />}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/groups/:id" element={<GroupDetail />} />
-        <Route path="/activity" element={<Placeholder name="Activity" />} />
-        <Route path="/analytics" element={<Placeholder name="Analytics" />} />
-        <Route path="/settings" element={<Placeholder name="Settings" />} />
+        <Route path="/activity" element={<Activity />} />
+        <Route path="/analytics" element={<Analytics />} />
+        <Route path="/settings" element={<Settings />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
