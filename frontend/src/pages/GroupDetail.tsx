@@ -348,7 +348,7 @@ function SettleUpDialog({
           Payee
           <select
             name="payee_id"
-            defaultValue={initial?.from === me?.id ? initial.to : group?.members.find((m) => m.id !== me?.id)?.id}
+            defaultValue={initial && initial.from === me?.id ? initial.to : group?.members.find((m) => m.id !== me?.id)?.id}
             className="h-10 rounded-lg border border-border bg-card px-3 focus-visible:outline-2 focus-visible:outline-ring"
             required
           >
