@@ -3,11 +3,13 @@ import { useState, type FormEvent } from "react";
 import { useParams } from "react-router";
 import {
   addMember,
+  createSettlement,
   deleteExpense,
   removeMember,
   useGroup,
   useGroupDebts,
   useGroupExpenses,
+  type Debt,
   type Expense,
   type Member,
 } from "../api";
@@ -19,6 +21,7 @@ import { EmptyState } from "../components/EmptyState";
 import { Input } from "../components/Input";
 import { Tabs } from "../components/Tabs";
 import { formatMinor } from "../format";
+import AddExpense from "./AddExpense";
 
 function memberName(members: Member[] | undefined, id: number): string {
   const m = members?.find((m) => m.id === id);
@@ -143,32 +146,140 @@ function ExpensesTab({
   );
 }
 
+function SettleUpDialog({
+  groupId,
+  currency,
+  initial,
+  onClose,
+}: {
+  groupId: string;
+  currency: string;
+  initial: Debt | undefined;
+  onClose: () => void;
+}) {
+  const { data: group } = useGroup(groupId);
+  const queryClient = useQueryClient();
+  const [error, setError] = useState("");
+
+  const settle = useMutation({
+    mutationFn: (body: { payer_id: number; payee_id: number; amount_minor: number }) =>
+      createSettlement(groupId, { ...body, currency }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["debts", groupId] });
+      onClose();
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : "Something went wrong"),
+  });
+
+  function onSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const data = new FormData(e.currentTarget);
+    const amountMinor = Math.round((parseFloat(data.get("amount") as string) || 0) * 100);
+    if (!(amountMinor > 0)) {
+      setError("Amount must be greater than zero");
+      return;
+    }
+    settle.mutate({
+      payer_id: Number(data.get("payer_id")),
+      payee_id: Number(data.get("payee_id")),
+      amount_minor: amountMinor,
+    });
+  }
+
+  return (
+    <Dialog open onClose={onClose} title="Settle up">
+      <form onSubmit={onSubmit} className="grid gap-4">
+        <label className="grid gap-1.5 text-sm">
+          Payer
+          <select
+            name="payer_id"
+            defaultValue={initial?.from ?? group?.members[0]?.id}
+            className="h-10 rounded-lg border border-border bg-card px-3 focus-visible:outline-2 focus-visible:outline-ring"
+            required
+          >
+            {group?.members.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="grid gap-1.5 text-sm">
+          Payee
+          <select
+            name="payee_id"
+            defaultValue={initial?.to ?? group?.members[0]?.id}
+            className="h-10 rounded-lg border border-border bg-card px-3 focus-visible:outline-2 focus-visible:outline-ring"
+            required
+          >
+            {group?.members.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="grid gap-1.5 text-sm">
+          Amount ({currency})
+          <Input name="amount" type="number" step="0.01" min="0.01" required defaultValue={initial ? (initial.amount / 100).toFixed(2) : undefined} />
+        </label>
+        {error && (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        )}
+        <Button type="submit" disabled={settle.isPending}>
+          {settle.isPending ? "Recording…" : "Record payment"}
+        </Button>
+      </form>
+    </Dialog>
+  );
+}
+
 function BalancesTab({ groupId }: { groupId: string }) {
   const { data: group } = useGroup(groupId);
   const { data: debts, isPending } = useGroupDebts(groupId);
-
-  if (isPending) return <p className="text-muted-fg">Loading…</p>;
-  if (!debts || debts.length === 0)
-    return <EmptyState title="All settled up" description="Nobody owes anything in this group." />;
+  const [settleOpen, setSettleOpen] = useState(false);
 
   return (
-    <ul className="grid gap-2">
-      {debts.map((d, i) => (
-        <li
-          key={i}
-          className="flex items-center gap-2 rounded-card border border-border bg-card px-4 py-3 text-sm"
-        >
-          <Avatar name={memberName(group?.members, d.from)} size={28} />
-          <span>
-            <strong>{memberName(group?.members, d.from)}</strong> owes{" "}
-            <strong>{memberName(group?.members, d.to)}</strong>
-          </span>
-          <span className="ml-auto font-medium text-destructive">
-            {formatMinor(d.amount, group?.currency ?? "USD")}
-          </span>
-        </li>
-      ))}
-    </ul>
+    <div>
+      <div className="mb-3 flex justify-end">
+        <Button variant="secondary" onClick={() => setSettleOpen(true)}>
+          Settle up
+        </Button>
+      </div>
+      {isPending ? (
+        <p className="text-muted-fg">Loading…</p>
+      ) : !debts || debts.length === 0 ? (
+        <EmptyState title="All settled up" description="Nobody owes anything in this group." />
+      ) : (
+        <ul className="grid gap-2">
+          {debts.map((d, i) => (
+            <li
+              key={i}
+              className="flex items-center gap-2 rounded-card border border-border bg-card px-4 py-3 text-sm"
+            >
+              <Avatar name={memberName(group?.members, d.from)} size={28} />
+              <span>
+                <strong>{memberName(group?.members, d.from)}</strong> owes{" "}
+                <strong>{memberName(group?.members, d.to)}</strong>
+              </span>
+              <span className="ml-auto font-medium text-destructive">
+                {formatMinor(d.amount, group?.currency ?? "USD")}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {settleOpen && (
+        <SettleUpDialog
+          groupId={groupId}
+          currency={group?.currency ?? "USD"}
+          initial={debts?.[0]}
+          onClose={() => setSettleOpen(false)}
+        />
+      )}
+    </div>
   );
 }
 
@@ -227,6 +338,7 @@ export default function GroupDetail() {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState("expenses");
   const [addOpen, setAddOpen] = useState(false);
+  const [expenseOpen, setExpenseOpen] = useState(false);
 
   const leave = useMutation({
     mutationFn: (userId: number) => removeMember(id, userId),
@@ -246,9 +358,12 @@ export default function GroupDetail() {
           <h1 className="text-2xl font-semibold">{group.name}</h1>
           <p className="text-sm text-muted-fg">{group.currency}</p>
         </div>
-        <Button variant="secondary" onClick={() => setAddOpen(true)}>
-          Add member
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={() => setExpenseOpen(true)}>Add expense</Button>
+          <Button variant="secondary" onClick={() => setAddOpen(true)}>
+            Add member
+          </Button>
+        </div>
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -293,6 +408,7 @@ export default function GroupDetail() {
       </div>
 
       <AddMemberDialog groupId={id} open={addOpen} onClose={() => setAddOpen(false)} />
+      {expenseOpen && <AddExpense groupId={id} onClose={() => setExpenseOpen(false)} />}
     </div>
   );
 }

@@ -104,3 +104,38 @@ export const useGroupExpenses = (id: number | string) =>
   useQuery({ queryKey: ["expenses", id], queryFn: () => getGroupExpenses(id) });
 export const useGroupDebts = (id: number | string) =>
   useQuery({ queryKey: ["debts", id], queryFn: () => getGroupDebts(id) });
+
+// --- Task 11: expense create + receipt + settlements (appended to minimize merge conflict) ---
+
+export type SplitInput = {
+  user_id: number;
+  mode: "equal" | "amounts" | "percent" | "shares";
+  value?: number | null;
+};
+
+export const createExpense = (
+  groupId: number | string,
+  body: {
+    description: string;
+    amount_minor: number;
+    currency: string;
+    payer_id: number;
+    splits: SplitInput[];
+    date?: string;
+    category?: string;
+  },
+) => api<Expense>(`/groups/${groupId}/expenses`, { body });
+
+export const uploadReceipt = (expenseId: number, file: File) => {
+  const form = new FormData();
+  form.append("file", file);
+  return api<{ receipt_path: string }>(`/expenses/${expenseId}/receipt`, {
+    method: "POST",
+    form,
+  });
+};
+
+export const createSettlement = (
+  groupId: number | string,
+  body: { payer_id: number; payee_id: number; amount_minor: number; currency: string },
+) => api(`/groups/${groupId}/settlements`, { body });
