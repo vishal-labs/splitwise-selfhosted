@@ -16,6 +16,7 @@ export function Tabs({ tabs, value, onChange }: Props) {
         <button
           key={t.id}
           id={`${id}-tab-${t.id}`}
+          type="button"
           role="tab"
           aria-selected={value === t.id}
           aria-controls={`${id}-panel-${t.id}`}
