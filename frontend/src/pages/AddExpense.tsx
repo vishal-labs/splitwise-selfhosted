@@ -166,6 +166,10 @@ export default function AddExpense({
         splits,
         ...(date ? { date } : {}),
         ...(category ? { category } : {}),
+        // ponytail: edit path ignores recurring (backend PATCH doesn't support it)
+        ...(!expense && repeat
+          ? { recurring: { freq: frequency, day: parseInt(repeatDay, 10) || 1 } }
+          : {}),
       };
       const saved = expense
         ? await updateExpense(expense.id, body)
