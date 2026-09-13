@@ -1,16 +1,45 @@
+import asyncio
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.db import init
-from app.routers import expenses, groups, settlements, users
+from app.db import SessionLocal, init
+from app.routers import analytics, comments, expenses, groups, settlements, uploads, users
+
+log = logging.getLogger(__name__)
+
+RECURRING_INTERVAL_S = 600
+
+
+async def _recurring_tick() -> None:
+    """One materialize pass; defensive import so a missing module never crashes the app."""
+    try:
+        from app.services.recurring import materialize_due
+    except ImportError:
+        log.warning("services.recurring not available; skipping")
+        return
+    try:
+        async with SessionLocal() as db:
+            await materialize_due(db)
+    except Exception:
+        log.exception("recurring materialize failed")
+
+
+async def _recurring_loop() -> None:
+    while True:
+        await asyncio.sleep(RECURRING_INTERVAL_S)
+        await _recurring_tick()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init()
+    await _recurring_tick()  # best-effort catch-up for sleeping containers
+    task = asyncio.create_task(_recurring_loop())
     yield
+    task.cancel()
 
 
 def create_app() -> FastAPI:
@@ -27,6 +56,9 @@ def create_app() -> FastAPI:
     app.include_router(groups.router)
     app.include_router(expenses.router)
     app.include_router(settlements.router)
+    app.include_router(analytics.router)
+    app.include_router(comments.router)
+    app.include_router(uploads.router)
 
     @app.get("/api/health")
     async def health():

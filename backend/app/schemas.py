@@ -1,4 +1,5 @@
 from datetime import date as Date
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field
@@ -115,3 +116,14 @@ class DebtOut(BaseModel):
     from_user: int = Field(serialization_alias="from")
     to_user: int = Field(serialization_alias="to")
     amount_minor: int = Field(serialization_alias="amount")
+
+
+class CommentCreate(BaseModel):
+    body: str = Field(min_length=1, max_length=2000)
+
+
+class CommentOut(BaseModel):
+    id: int
+    user_id: int
+    body: str
+    created_at: datetime
