@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.db import init
+from app.routers import users
 
 
 @asynccontextmanager
@@ -21,6 +22,8 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    app.include_router(users.router)
 
     @app.get("/api/health")
     async def health():
