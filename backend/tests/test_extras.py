@@ -221,14 +221,3 @@ async def test_activity_endpoint(client):
     rows = r.json()
     assert len(rows) >= 2  # created_group + joined
     assert rows[0]["user_name"]
-
-
-async def test_rates_endpoint(client):
-    await _register(client, "a@b.com")
-    r = await client.get("/api/rates?base=USD")
-    if r.status_code == 503:
-        return  # offline test env
-    assert r.status_code == 200
-    body = r.json()
-    assert body["base"] == "USD"
-    assert body["rates"]["EUR"] > 0

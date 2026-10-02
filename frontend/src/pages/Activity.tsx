@@ -3,15 +3,6 @@ import { useActivity, useGroups } from "../api";
 import { Avatar } from "../components/Avatar";
 import { EmptyState } from "../components/EmptyState";
 
-export type ActivityItem = {
-  id: number;
-  user_id: number;
-  user_name: string;
-  verb: string;
-  target_id: number | null;
-  created_at: string;
-};
-
 /** "expense_added" → "added an expense"; unknown verbs fall back to the raw word. */
 const VERB_PHRASES: Record<string, string> = {
   created_group: "created the group",

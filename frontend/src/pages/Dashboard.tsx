@@ -1,7 +1,7 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router";
-import { api, createGroup, getGroupDebts, useGroups, type Group } from "../api";
+import { api, createGroup, getGroupDebts, joinGroup, useGroups, type Group } from "../api";
 import { useMe } from "../App";
 import { Avatar } from "../components/Avatar";
 import { Button } from "../components/Button";
@@ -69,9 +69,6 @@ function GroupCard({ group, myId }: { group: Group; myId: number }) {
     </Link>
   );
 }
-
-export const joinGroup = (code: string) =>
-  api<Group>(`/groups/join/${encodeURIComponent(code)}`, { method: "POST" });
 
 export default function Dashboard() {
   const { data: me } = useMe();
