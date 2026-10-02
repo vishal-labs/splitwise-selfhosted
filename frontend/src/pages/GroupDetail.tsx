@@ -465,7 +465,7 @@ function BalancesTab({ groupId }: { groupId: string }) {
                 <strong>{memberName(group?.members, d.to)}</strong>
               </span>
               <span className="ml-auto font-medium text-destructive">
-                {formatMinor(d.amount, group?.currency ?? "USD")}
+                {formatMinor(d.amount, group?.currency ?? "INR")}
               </span>
             </li>
           ))}
@@ -474,7 +474,7 @@ function BalancesTab({ groupId }: { groupId: string }) {
       {settleOpen && (
         <SettleUpDialog
           groupId={groupId}
-          currency={group?.currency ?? "USD"}
+          currency={group?.currency ?? "INR"}
           initial={debts?.[0]}
           onClose={() => setSettleOpen(false)}
         />

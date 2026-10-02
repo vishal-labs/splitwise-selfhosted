@@ -104,7 +104,7 @@ export default function Dashboard() {
     const data = new FormData(e.currentTarget);
     create.mutate({
       name: (data.get("name") as string).trim(),
-      currency: ((data.get("currency") as string) || "USD").trim().toUpperCase(),
+      currency: ((data.get("currency") as string) || "INR").trim().toUpperCase(),
     });
   }
 
@@ -133,13 +133,13 @@ export default function Dashboard() {
         <p className="mt-2 text-sm font-medium">
           {owed > 0 && (
             <span className="text-success">
-              You're owed {formatMinor(owed, groups?.[0]?.currency ?? "USD")}
+              You're owed {formatMinor(owed, groups?.[0]?.currency ?? "INR")}
             </span>
           )}
           {owed > 0 && owe > 0 && <span className="text-muted-fg"> · </span>}
           {owe > 0 && (
             <span className="text-destructive">
-              You owe {formatMinor(owe, groups?.[0]?.currency ?? "USD")}
+              You owe {formatMinor(owe, groups?.[0]?.currency ?? "INR")}
             </span>
           )}
         </p>
@@ -169,7 +169,7 @@ export default function Dashboard() {
           </label>
           <label className="grid gap-1.5 text-sm">
             Currency
-            <Input name="currency" defaultValue="USD" required pattern="[A-Za-z]{3}" title="3-letter currency code" />
+            <Input name="currency" defaultValue="INR" required pattern="[A-Za-z]{3}" title="3-letter currency code" />
           </label>
           {error && (
             <p role="alert" className="text-sm text-destructive">
