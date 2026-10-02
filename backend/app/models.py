@@ -14,6 +14,8 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True)
     name: Mapped[str] = mapped_column(String(255))
     password_hash: Mapped[str] = mapped_column(String(255))
+    upi_id: Mapped[str | None] = mapped_column(String(256))
+    upi_qr_path: Mapped[str | None] = mapped_column(String(255))
 
 
 class Session(Base):

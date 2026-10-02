@@ -151,7 +151,17 @@ async def get_group(
         created_by=group.created_by,
         invite_code=group.invite_code,
         member_count=len(rows),
-        members=[MemberOut(id=u.id, email=u.email, name=u.name, role=role) for u, role in rows],
+        members=[
+            MemberOut(
+                id=u.id,
+                email=u.email,
+                name=u.name,
+                role=role,
+                upi_id=u.upi_id,
+                has_upi_qr=bool(u.upi_qr_path),
+            )
+            for u, role in rows
+        ],
     )
 
 

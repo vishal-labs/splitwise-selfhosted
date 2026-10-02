@@ -18,16 +18,25 @@ class UserLogin(BaseModel):
     password: str
 
 
+class UserUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    upi_id: str | None = None
+
+
 class UserOut(BaseModel):
     model_config = {"from_attributes": True}
 
     id: int
     email: str
     name: str
+    upi_id: str | None = None
+    has_upi_qr: bool = False
 
 
 def user_out(user: User) -> UserOut:
-    return UserOut.model_validate(user)
+    out = UserOut.model_validate(user)
+    out.has_upi_qr = bool(user.upi_qr_path)
+    return out
 
 
 class GroupCreate(BaseModel):

@@ -10,6 +10,7 @@ import {
   deleteGroup,
   getComments,
   removeMember,
+  upiQrUrl,
   useGroup,
   useGroupDebts,
   useGroupExpenses,
@@ -18,6 +19,8 @@ import {
   type Expense,
   type Member,
 } from "../api";
+import { QRCodeSVG } from "qrcode.react";
+import { buildUpiUri, isValidVpa } from "../upi";
 import { useMe } from "../App";
 import { Avatar } from "../components/Avatar";
 import { CheckIcon, CopyIcon, PencilIcon, PlusIcon, RepeatIcon, TrashIcon, XIcon } from "../components/icons";
@@ -345,6 +348,61 @@ function ExpensesTab({
   );
 }
 
+function MemberProfileDialog({
+  member,
+  groupName,
+  onClose,
+}: {
+  member: Member;
+  groupName: string;
+  onClose: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const vpa = member.upi_id && isValidVpa(member.upi_id) ? member.upi_id : null;
+
+  async function copy() {
+    if (!vpa) return;
+    await navigator.clipboard.writeText(vpa);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <Dialog open onClose={onClose} title={member.name}>
+      {!vpa && !member.has_upi_qr ? (
+        <p className="text-sm text-muted-fg">No UPI set up</p>
+      ) : (
+        <div className="grid gap-4">
+          {vpa && (
+            <div className="flex items-center justify-between gap-2 rounded-card border border-border bg-card p-3">
+              <span className="min-w-0 truncate text-sm">{vpa}</span>
+              <Button variant="secondary" onClick={() => void copy()}>
+                {copied ? <CheckIcon size={16} /> : <CopyIcon size={16} />}
+                <span className="max-sm:hidden">{copied ? "Copied" : "Copy UPI ID"}</span>
+              </Button>
+            </div>
+          )}
+          {vpa ? (
+            <div className="flex justify-center">
+              <QRCodeSVG
+                value={buildUpiUri({ vpa, payeeName: member.name, note: `Splitwise: ${groupName}` })}
+                size={200}
+                className="h-auto max-w-full"
+              />
+            </div>
+          ) : (
+            <img
+              src={upiQrUrl(member.id)}
+              alt={`${member.name} UPI QR`}
+              className="mx-auto max-h-64 max-w-full rounded-card border border-border object-contain"
+            />
+          )}
+        </div>
+      )}
+    </Dialog>
+  );
+}
+
 function SettleUpDialog({
   groupId,
   currency,
@@ -361,6 +419,8 @@ function SettleUpDialog({
   const queryClient = useQueryClient();
   const [error, setError] = useState("");
   const [payeeId, setPayeeId] = useState<number | null>(null);
+  const [amount, setAmount] = useState(initial ? (initial.amount / 100).toFixed(2) : "");
+  const [copied, setCopied] = useState(false);
 
   const settle = useMutation({
     mutationFn: (body: { payer_id: number; payee_id: number; amount_minor: number }) =>
@@ -372,17 +432,33 @@ function SettleUpDialog({
     onError: (e) => setError(e instanceof Error ? e.message : "Something went wrong"),
   });
 
+  const defaultPayeeId =
+    initial && initial.from === me?.id ? initial.to : group?.members.find((m) => m.id !== me?.id)?.id;
+  const selectedPayeeId = payeeId ?? defaultPayeeId ?? null;
+  const payee = group?.members.find((m) => m.id === selectedPayeeId);
+  const amountMinor = Math.round((parseFloat(amount) || 0) * 100);
+  const payeeVpa = payee?.upi_id && isValidVpa(payee.upi_id) ? payee.upi_id : null;
+  const note = `Splitwise settle up: ${me?.name ?? ""} -> ${payee?.name ?? ""} . ${group?.name ?? ""}`.slice(0, 50);
+  const showUpi = amountMinor > 0 && !!payee && (!!payeeVpa || payee.has_upi_qr);
+  const uri = payeeVpa ? buildUpiUri({ vpa: payeeVpa, payeeName: payee?.name ?? "", amountMinor, note }) : "";
+
+  async function copyVpa() {
+    if (!payeeVpa) return;
+    await navigator.clipboard.writeText(payeeVpa);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
   function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const data = new FormData(e.currentTarget);
-    const amountMinor = Math.round((parseFloat(data.get("amount") as string) || 0) * 100);
     if (!(amountMinor > 0)) {
       setError("Amount must be greater than zero");
       return;
     }
     settle.mutate({
       payer_id: Number(data.get("payer_id")),
-      payee_id: payeeId ?? 0,
+      payee_id: selectedPayeeId ?? 0,
       amount_minor: amountMinor,
     });
   }
@@ -401,7 +477,7 @@ function SettleUpDialog({
             <span className="text-muted-fg">To</span>
             <select
               name="payee_id"
-              value={payeeId ?? (initial && initial.from === me?.id ? initial.to : group?.members.find((m) => m.id !== me?.id)?.id) ?? ""}
+              value={selectedPayeeId ?? ""}
               onChange={(e) => setPayeeId(Number(e.target.value))}
               className="menu-select h-9 text-sm"
               required
@@ -421,8 +497,46 @@ function SettleUpDialog({
         </div>
         <label className="grid gap-1.5 text-sm">
           Amount ({currency})
-          <Input name="amount" type="number" step="0.01" min="0.01" inputMode="decimal" autoComplete="off" required defaultValue={initial ? (initial.amount / 100).toFixed(2) : undefined} />
+          <Input
+            name="amount"
+            type="number"
+            step="0.01"
+            min="0.01"
+            inputMode="decimal"
+            autoComplete="off"
+            required
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+          />
         </label>
+        {showUpi && payee && (
+          <div className="grid gap-3 rounded-card border border-border bg-card p-4">
+            <p className="text-sm font-medium">Pay via UPI</p>
+            {payeeVpa ? (
+              <>
+                <div className="hidden justify-items-center gap-3 sm:grid">
+                  <QRCodeSVG value={uri} size={200} className="h-auto max-w-full" />
+                  <Button variant="secondary" onClick={() => void copyVpa()}>
+                    {copied ? <CheckIcon size={16} /> : <CopyIcon size={16} />}
+                    {copied ? "Copied" : "Copy UPI ID"}
+                  </Button>
+                </div>
+                <a
+                  href={uri}
+                  className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 font-medium text-primary-fg sm:hidden"
+                >
+                  Pay with UPI app
+                </a>
+              </>
+            ) : (
+              <img
+                src={upiQrUrl(payee.id)}
+                alt={`${payee.name} UPI QR`}
+                className="mx-auto max-h-64 max-w-full rounded-card border border-border object-contain"
+              />
+            )}
+          </div>
+        )}
         {error && (
           <p role="alert" className="text-sm text-destructive">
             {error}
@@ -543,6 +657,7 @@ export default function GroupDetail() {
   const [editing, setEditing] = useState<Expense | null>(null);
   const [copied, setCopied] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [profileMember, setProfileMember] = useState<Member | null>(null);
 
   const del = useMutation({
     mutationFn: () => deleteGroup(id),
@@ -622,8 +737,15 @@ export default function GroupDetail() {
             key={m.id}
             className="flex items-center gap-1.5 rounded-full border border-border bg-card py-1 pl-1 pr-3 text-sm"
           >
-            <Avatar name={m.name} size={24} />
-            {m.name}
+            <button
+              type="button"
+              onClick={() => setProfileMember(m)}
+              aria-label={`View ${m.name} payment details`}
+              className="flex cursor-pointer items-center gap-1.5 rounded-full focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+            >
+              <Avatar name={m.name} size={24} />
+              {m.name}
+            </button>
             {m.role === "admin" && <span className="text-xs text-muted-fg">admin</span>}
             {myMembership?.role === "admin" && m.id !== me?.id && group.members.length > 1 && (
               <button
@@ -672,6 +794,13 @@ export default function GroupDetail() {
         )}
       </div>
 
+      {profileMember && (
+        <MemberProfileDialog
+          member={profileMember}
+          groupName={group.name}
+          onClose={() => setProfileMember(null)}
+        />
+      )}
       <AddMemberDialog groupId={id} open={addOpen} onClose={() => setAddOpen(false)} />
       {expenseOpen && <AddExpense groupId={id} onClose={() => setExpenseOpen(false)} />}
       {editing && <AddExpense groupId={id} expense={editing} onClose={() => setEditing(null)} />}
