@@ -10,6 +10,7 @@ import {
   deleteGroup,
   getComments,
   removeMember,
+  uploadSettlementProof,
   upiQrUrl,
   useGroup,
   useGroupDebts,
@@ -19,14 +20,16 @@ import {
   type Expense,
   type Member,
 } from "../api";
-import { QRCodeSVG } from "qrcode.react";
 import { buildUpiUri, isValidVpa } from "../upi";
+import UpiQr from "../components/UpiQr";
 import { useMe } from "../App";
 import { Avatar } from "../components/Avatar";
-import { CheckIcon, CopyIcon, PencilIcon, PlusIcon, RepeatIcon, TrashIcon, XIcon } from "../components/icons";
+import { CheckIcon, CopyIcon, PencilIcon, PlusIcon, RepeatIcon, TrashIcon, XIcon, PaperclipIcon } from "../components/icons";
 import { Button } from "../components/Button";
 import { Dialog } from "../components/Dialog";
 import { EmptyState } from "../components/EmptyState";
+import { ApiError } from "../api";
+import { ErrorState } from "../components/ErrorState";
 import { Input } from "../components/Input";
 import { PaymentForm } from "../components/PaymentForm";
 import { Sheet } from "../components/Sheet";
@@ -306,10 +309,12 @@ function ExpensesTab({
   onEdit: (e: Expense) => void;
 }) {
   const { data: group } = useGroup(groupId);
-  const { data: expenses, isPending } = useGroupExpenses(groupId);
+  const { data: expenses, isPending, isError, refetch } = useGroupExpenses(groupId);
   const members = group?.members;
 
   if (isPending) return <p className="text-muted-fg">Loading…</p>;
+  if (isError)
+    return <ErrorState description="Couldn't load expenses." action={() => void refetch()} />;
   if (!expenses || expenses.length === 0)
     return (
       <EmptyState
@@ -393,13 +398,10 @@ function MemberProfileDialog({
             </div>
           )}
           {vpa ? (
-            <div className="flex justify-center">
-              <QRCodeSVG
-                value={buildUpiUri({ vpa, payeeName: member.name, note: `Splitwise: ${groupName}` })}
-                size={200}
-                className="h-auto max-w-full"
-              />
-            </div>
+            <UpiQr
+              value={buildUpiUri({ vpa, payeeName: member.name, note: `Splitwise: ${groupName}` })}
+              caption={member.name}
+            />
           ) : (
             <img
               src={upiQrUrl(member.id)}
@@ -432,15 +434,48 @@ function SettleUpDialog({
   // null until the user edits; the field follows the selected payee's debt
   const [amountOverride, setAmountOverride] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [proof, setProof] = useState<File | null>(null);
+  const [pendingProof, setPendingProof] = useState<number | null>(null);
 
   const settle = useMutation({
-    mutationFn: (body: { payer_id: number; payee_id: number; amount_minor: number }) =>
-      createSettlement(groupId, { ...body, currency }),
+    mutationFn: async (body: { payer_id: number; payee_id: number; amount_minor: number }) => {
+      const settlement = await createSettlement(groupId, { ...body, currency });
+      // settlement exists the moment create resolves — proof is a separate,
+      // non-blocking step so a failed upload can't cause a double-record
+      let proofFailed = false;
+      if (proof) {
+        try {
+          await uploadSettlementProof(settlement.id, proof);
+        } catch {
+          proofFailed = true;
+        }
+      }
+      return { settlement, proofFailed };
+    },
+    onSuccess: ({ settlement, proofFailed }) => {
+      queryClient.invalidateQueries({ queryKey: ["debts", groupId] });
+      if (proofFailed) {
+        // keep the dialog open: settlement is done, let them retry the proof
+        setError(`Payment recorded — proof upload failed. Retry below (settlement #${settlement.id}).`);
+        setPendingProof(settlement.id);
+        setProof(null);
+      } else {
+        onClose();
+      }
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : "Something went wrong"),
+  });
+
+  const retryProof = useMutation({
+    mutationFn: () => uploadSettlementProof(pendingProof!, proof!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["debts", groupId] });
       onClose();
     },
-    onError: (e) => setError(e instanceof Error ? e.message : "Something went wrong"),
+    onError: (e) =>
+      setError(
+        `Payment recorded — proof upload failed: ${e instanceof Error ? e.message : "unknown error"}`,
+      ),
   });
 
   const myDebts = me ? debts.filter((d) => d.from === me.id) : [];
@@ -532,7 +567,7 @@ function SettleUpDialog({
             {payeeVpa ? (
               <>
                 <div className="hidden justify-items-center gap-3 sm:grid">
-                  <QRCodeSVG value={uri} size={200} className="h-auto max-w-full" />
+                  <UpiQr value={uri} caption={payee.name} />
                   <Button variant="secondary" onClick={() => void copyVpa()}>
                     {copied ? <CheckIcon size={16} /> : <CopyIcon size={16} />}
                     {copied ? "Copied" : "Copy UPI ID"}
@@ -559,8 +594,30 @@ function SettleUpDialog({
             {error}
           </p>
         )}
-        <Button type="submit" disabled={settle.isPending}>
-          {settle.isPending ? "Recording…" : "Record payment"}
+        <label className="chipless max-w-full">
+          <PaperclipIcon />
+          <span className="max-w-[9rem] truncate font-medium">
+            {proof ? proof.name : "Attach payment proof (optional)"}
+          </span>
+          <input
+            type="file"
+            accept=".png,.jpg,.jpeg,.webp,.pdf"
+            className="sr-only"
+            onChange={(e) => setProof(e.target.files?.[0] ?? null)}
+          />
+        </label>
+        {pendingProof !== null && (
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={!proof || retryProof.isPending}
+            onClick={() => retryProof.mutate()}
+          >
+            {retryProof.isPending ? "Uploading…" : "Attach proof to recorded payment"}
+          </Button>
+        )}
+        <Button type="submit" disabled={settle.isPending || pendingProof !== null}>
+          {pendingProof !== null ? "Payment recorded ✓" : settle.isPending ? "Recording…" : "Record payment"}
         </Button>
       </form>
     </Dialog>
@@ -685,7 +742,7 @@ function SettleAllDialog({
               {payeeVpa ? (
                 <>
                   <div className="hidden justify-items-center gap-3 sm:grid">
-                    <QRCodeSVG value={uri} size={200} className="h-auto max-w-full" />
+                    <UpiQr value={uri} caption={payee?.name} />
                     <Button variant="secondary" onClick={() => void copyVpa()}>
                       {copied ? <CheckIcon size={16} /> : <CopyIcon size={16} />}
                       {copied ? "Copied" : "Copy UPI ID"}
@@ -741,22 +798,29 @@ function SettleAllDialog({
 
 function BalancesTab({ groupId }: { groupId: string }) {
   const { data: group } = useGroup(groupId);
-  const { data: debts, isPending } = useGroupDebts(groupId);
+  const { data: debts, isPending, isError, refetch } = useGroupDebts(groupId);
+  const { data: me } = useMe();
   const [settleOpen, setSettleOpen] = useState(false);
   const [settleAllOpen, setSettleAllOpen] = useState(false);
+  // Single debt (or none) is covered by the Settle-up dialog alone.
+  const myDebtCount = me ? (debts ?? []).filter((d) => d.from === me.id).length : 0;
 
   return (
     <div>
       <div className="mb-3 flex justify-end gap-2">
-        <Button variant="secondary" disabled={isPending} onClick={() => setSettleAllOpen(true)}>
-          Settle all
-        </Button>
+        {myDebtCount > 1 && (
+          <Button variant="secondary" disabled={isPending} onClick={() => setSettleAllOpen(true)}>
+            Settle all
+          </Button>
+        )}
         <Button variant="secondary" onClick={() => setSettleOpen(true)}>
           Settle up
         </Button>
       </div>
       {isPending ? (
         <p className="text-muted-fg">Loading…</p>
+      ) : isError ? (
+        <ErrorState description="Couldn't load balances." action={() => void refetch()} />
       ) : !debts || debts.length === 0 ? (
         <EmptyState title="All settled up" description="Nobody owes anything in this group." />
       ) : (
@@ -849,7 +913,7 @@ function AddMemberDialog({
 export default function GroupDetail() {
   const { id = "" } = useParams();
   const { data: me } = useMe();
-  const { data: group, isPending, error } = useGroup(id);
+  const { data: group, isPending, error, refetch } = useGroup(id);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [tab, setTab] = useState("expenses");
@@ -885,8 +949,14 @@ export default function GroupDetail() {
   }
 
   if (isPending) return <p className="text-muted-fg">Loading…</p>;
-  if (error || !group)
-    return <EmptyState title="Group not found" description="You may not be a member." />;
+  if (error || !group) {
+    const notFound = error instanceof ApiError && error.status === 404;
+    return notFound ? (
+      <EmptyState title="Group not found" description="You may not be a member." />
+    ) : (
+      <ErrorState description="Couldn't load this group." action={() => void refetch()} />
+    );
+  }
 
   const myMembership = me ? group.members.find((m) => m.id === me.id) : undefined;
 

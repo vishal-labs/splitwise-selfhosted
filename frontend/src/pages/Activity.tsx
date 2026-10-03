@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useActivity, useGroups } from "../api";
 import { Avatar } from "../components/Avatar";
 import { EmptyState } from "../components/EmptyState";
+import { ErrorState } from "../components/ErrorState";
 
 /** "expense_added" → "added an expense"; unknown verbs fall back to the raw word. */
 const VERB_PHRASES: Record<string, string> = {
@@ -31,13 +32,22 @@ function relativeTime(iso: string): string {
 }
 
 export default function Activity() {
-  const { data: groups, isPending: groupsPending } = useGroups();
+  const { data: groups, isPending: groupsPending, isError: groupsError, refetch: refetchGroups } = useGroups();
   const [groupId, setGroupId] = useState<number | "">("");
 
   const group = groups?.find((g) => g.id === groupId) ?? groups?.[0];
-  const { data: items, isPending } = useActivity(group?.id ?? 0);
+  const { data: items, isPending, isError, refetch } = useActivity(group?.id ?? 0);
 
   if (groupsPending) return <p className="text-muted-fg">Loading…</p>;
+  if (groupsError)
+    return (
+      <div>
+        <h1 className="text-2xl font-semibold">Activity</h1>
+        <div className="mt-4">
+          <ErrorState description="Couldn't load your groups." action={() => void refetchGroups()} />
+        </div>
+      </div>
+    );
   if (!groups?.length)
     return <EmptyState title="No groups yet" description="Create a group to see its activity." />;
 
@@ -60,6 +70,10 @@ export default function Activity() {
 
       {isPending ? (
         <p className="mt-6 text-muted-fg">Loading…</p>
+      ) : isError ? (
+        <div className="mt-6">
+          <ErrorState description="Couldn't load activity." action={() => void refetch()} />
+        </div>
       ) : !items?.length ? (
         <div className="mt-6">
           <EmptyState title="No activity" description="Nothing has happened in this group yet." />

@@ -7,6 +7,7 @@ import { Avatar } from "../components/Avatar";
 import { Button } from "../components/Button";
 import { Dialog } from "../components/Dialog";
 import { EmptyState } from "../components/EmptyState";
+import { ErrorState } from "../components/ErrorState";
 import { Input } from "../components/Input";
 import { PaymentForm } from "../components/PaymentForm";
 import { formatMinor } from "../format";
@@ -48,7 +49,7 @@ function useNetTotals(groups: Group[] | undefined, myId: number) {
 }
 
 function GroupCard({ group, myId }: { group: Group; myId: number }) {
-  const { data: net } = useNetBalance(group, myId);
+  const { data: net, isError, refetch } = useNetBalance(group, myId);
   return (
     <Link
       to={`/groups/${group.id}`}
@@ -61,11 +62,28 @@ function GroupCard({ group, myId }: { group: Group; myId: number }) {
           {group.member_count} {group.member_count === 1 ? "member" : "members"}
         </p>
       </div>
-      {net !== undefined && net !== 0 && (
-        <span className={`text-sm font-medium ${net > 0 ? "text-success" : "text-destructive"}`}>
-          {net > 0 ? "+" : "−"}
-          {formatMinor(Math.abs(net), group.currency)}
+      {isError ? (
+        <span className="shrink-0 text-sm text-destructive">
+          Balance unavailable{" "}
+          <button
+            type="button"
+            className="underline hover:opacity-80"
+            onClick={(e) => {
+              e.preventDefault();
+              void refetch();
+            }}
+          >
+            Retry
+          </button>
         </span>
+      ) : (
+        net !== undefined &&
+        net !== 0 && (
+          <span className={`text-sm font-medium ${net > 0 ? "text-success" : "text-destructive"}`}>
+            {net > 0 ? "+" : "−"}
+            {formatMinor(Math.abs(net), group.currency)}
+          </span>
+        )
       )}
     </Link>
   );
@@ -73,7 +91,7 @@ function GroupCard({ group, myId }: { group: Group; myId: number }) {
 
 export default function Dashboard() {
   const { data: me } = useMe();
-  const { data: groups, isPending } = useGroups();
+  const { data: groups, isPending, isError, refetch } = useGroups();
   const { owed, owe } = useNetTotals(groups, me?.id ?? 0);
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -118,6 +136,20 @@ export default function Dashboard() {
   }
 
   if (isPending) return <p className="text-muted-fg">Loading…</p>;
+  if (isError)
+    return (
+      <div>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-semibold">Groups</h1>
+        </div>
+        <div className="mt-4">
+          <ErrorState
+            description="Couldn't load your groups."
+            action={() => void refetch()}
+          />
+        </div>
+      </div>
+    );
 
   return (
     <div>

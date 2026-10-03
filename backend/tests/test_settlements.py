@@ -1,3 +1,16 @@
+import os
+
+import pytest
+
+pytestmark = pytest.mark.asyncio
+
+
+@pytest.fixture(autouse=True)
+def _upload_dir(tmp_path):
+    # must be set before app.config is imported inside the client fixture
+    os.environ["UPLOAD_DIR"] = str(tmp_path / "uploads")
+
+
 async def _register(client, email: str) -> str:
     client.cookies.clear()
     r = await client.post(
@@ -135,3 +148,91 @@ async def test_settlement_activity_logged(client):
     assert settlement is not None
     assert settlement.amount_minor == 500
     assert settlement.currency == "USD"
+
+
+# --- payment proof ---
+
+
+async def _create_settlement(client, group_id: int, payer_id: int, payee_id: int) -> int:
+    r = await client.post(
+        f"/api/groups/{group_id}/settlements",
+        json={"payer_id": payer_id, "payee_id": payee_id, "amount_minor": 500, "currency": "USD"},
+    )
+    assert r.status_code == 200, r.text
+    return r.json()["id"]
+
+
+async def test_proof_upload_and_serve_roundtrip(client):
+    group_id, a, b, _ = await _setup_group(client)
+    sid = await _create_settlement(client, group_id, b, a)
+    payload = b"\x89PNG fake image bytes"
+
+    r = await client.post(
+        f"/api/settlements/{sid}/proof",
+        files={"file": ("proof.png", payload, "image/png")},
+    )
+    assert r.status_code == 200, r.text
+    name = r.json()["proof_path"]
+    assert name.endswith(".png")
+
+    r = await client.get(f"/api/settlements/{sid}/proof")
+    assert r.status_code == 200
+    assert r.content == payload
+
+
+async def test_proof_wrong_type_rejected(client):
+    group_id, a, b, _ = await _setup_group(client)
+    sid = await _create_settlement(client, group_id, b, a)
+    r = await client.post(
+        f"/api/settlements/{sid}/proof",
+        files={"file": ("evil.txt", b"nope", "text/plain")},
+    )
+    assert r.status_code == 422
+
+
+async def test_proof_too_large_413(client):
+    group_id, a, b, _ = await _setup_group(client)
+    sid = await _create_settlement(client, group_id, b, a)
+    r = await client.post(
+        f"/api/settlements/{sid}/proof",
+        files={"file": ("big.png", b"x" * (5 * 1024 * 1024 + 1), "image/png")},
+    )
+    assert r.status_code == 413
+
+
+async def test_proof_non_member_404(client):
+    group_id, a, b, _ = await _setup_group(client)
+    sid = await _create_settlement(client, group_id, b, a)
+    token_c = await _register(client, "c@b.com")
+    await _switch(client, token_c)
+    r = await client.post(
+        f"/api/settlements/{sid}/proof",
+        files={"file": ("p.png", b"x", "image/png")},
+    )
+    assert r.status_code == 404
+    r = await client.get(f"/api/settlements/{sid}/proof")
+    assert r.status_code == 404
+
+
+async def test_proof_replace_unlinks_old_file(client):
+    group_id, a, b, _ = await _setup_group(client)
+    sid = await _create_settlement(client, group_id, b, a)
+    upload_dir = os.environ["UPLOAD_DIR"]
+
+    r = await client.post(
+        f"/api/settlements/{sid}/proof",
+        files={"file": ("first.png", b"one", "image/png")},
+    )
+    assert r.status_code == 200, r.text
+    first = r.json()["proof_path"]
+    assert len(os.listdir(upload_dir)) == 1
+
+    r = await client.post(
+        f"/api/settlements/{sid}/proof",
+        files={"file": ("second.jpg", b"two", "image/jpeg")},
+    )
+    assert r.status_code == 200, r.text
+    second = r.json()["proof_path"]
+    assert second != first
+    assert len(os.listdir(upload_dir)) == 1  # old file unlinked, new one remains
+    assert os.listdir(upload_dir) == [second]

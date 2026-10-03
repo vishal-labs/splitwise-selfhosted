@@ -177,7 +177,7 @@ export const uploadReceipt = (expenseId: number, file: File) => {
 export const createSettlement = (
   groupId: number | string,
   body: { payer_id: number; payee_id: number; amount_minor: number; currency: string },
-) => api(`/groups/${groupId}/settlements`, { body });
+): Promise<Settlement> => api(`/groups/${groupId}/settlements`, { body });
 
 export const cancelRecurring = (groupId: number | string, ruleId: number) =>
   api(`/groups/${groupId}/recurring/${ruleId}`, { method: "DELETE" });
@@ -238,3 +238,26 @@ export const upiQrUrl = (userId: number) => `/api/users/${userId}/upi-qr`;
 
 export const changePassword = (body: { current_password: string; new_password: string }) =>
   api<void>("/users/me/password", { method: "POST", body });
+
+// --- Settlement proof (appended to minimize merge conflict) ---
+
+export type Settlement = {
+  id: number;
+  group_id: number;
+  payer_id: number;
+  payee_id: number;
+  amount_minor: number;
+  currency: string;
+  rate: number | null;
+  date: string;
+  proof_path: string | null;
+};
+
+export const uploadSettlementProof = (settlementId: number, file: File) => {
+  const form = new FormData();
+  form.append("file", file);
+  return api<{ proof_path: string }>(`/settlements/${settlementId}/proof`, {
+    method: "POST",
+    form,
+  });
+};

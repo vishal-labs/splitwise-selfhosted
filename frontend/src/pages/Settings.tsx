@@ -6,6 +6,7 @@ import { Avatar } from "../components/Avatar";
 import { Button } from "../components/Button";
 import { Dialog } from "../components/Dialog";
 import { EmptyState } from "../components/EmptyState";
+import { ErrorState } from "../components/ErrorState";
 import { Input } from "../components/Input";
 import { PaymentForm } from "../components/PaymentForm";
 
@@ -23,7 +24,7 @@ async function downloadCsv(groupId: number, name: string) {
 
 export default function Settings() {
   const { data: me } = useMe();
-  const { data: groups, isPending } = useGroups();
+  const { data: groups, isPending, isError, refetch } = useGroups();
   const [pwOpen, setPwOpen] = useState(false);
   const [pwStatus, setPwStatus] = useState("");
 
@@ -52,6 +53,10 @@ export default function Settings() {
         <p className="mt-1 text-sm text-muted-fg">Download all expenses for a group as CSV.</p>
         {isPending ? (
           <p className="mt-4 text-sm text-muted-fg">Loading…</p>
+        ) : isError ? (
+          <div className="mt-4">
+            <ErrorState description="Couldn't load your groups." action={() => void refetch()} />
+          </div>
         ) : !groups?.length ? (
           <div className="mt-4">
             <EmptyState title="No groups" description="Create a group first to export its data." />

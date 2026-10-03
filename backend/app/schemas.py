@@ -137,6 +137,7 @@ class SettlementOut(BaseModel):
     currency: str
     rate: float | None
     date: Date
+    proof_path: str | None = None
 
 
 class DebtOut(BaseModel):

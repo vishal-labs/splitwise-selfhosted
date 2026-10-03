@@ -14,6 +14,7 @@ import {
 import { useAnalytics, useGroups } from "../api";
 import { formatMinor } from "../format";
 import { EmptyState } from "../components/EmptyState";
+import { ErrorState } from "../components/ErrorState";
 
 const MONTHS = [3, 6, 12] as const;
 
@@ -35,14 +36,23 @@ function monthLabel(ym: string) {
 }
 
 export default function Analytics() {
-  const { data: groups, isPending: groupsPending } = useGroups();
+  const { data: groups, isPending: groupsPending, isError: groupsError, refetch: refetchGroups } = useGroups();
   const [groupId, setGroupId] = useState<number | "">("");
   const [months, setMonths] = useState<number>(6);
 
   const group = groups?.find((g) => g.id === groupId) ?? groups?.[0];
-  const { data, isPending } = useAnalytics(group?.id ?? 0, months);
+  const { data, isPending, isError, refetch } = useAnalytics(group?.id ?? 0, months);
 
   if (groupsPending) return <p className="text-muted-fg">Loading…</p>;
+  if (groupsError)
+    return (
+      <div>
+        <h1 className="text-2xl font-semibold">Analytics</h1>
+        <div className="mt-4">
+          <ErrorState description="Couldn't load your groups." action={() => void refetchGroups()} />
+        </div>
+      </div>
+    );
   if (!groups?.length)
     return <EmptyState title="No groups yet" description="Create a group to see spending analytics." />;
 
@@ -82,6 +92,10 @@ export default function Analytics() {
 
       {isPending ? (
         <p className="mt-6 text-muted-fg">Loading…</p>
+      ) : isError ? (
+        <div className="mt-6">
+          <ErrorState description="Couldn't load analytics." action={() => void refetch()} />
+        </div>
       ) : total === 0 ? (
         <div className="mt-6">
           <EmptyState title="No spending" description="No expenses in this period." />

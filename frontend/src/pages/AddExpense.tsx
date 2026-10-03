@@ -10,7 +10,7 @@ import {
 } from "../api";
 import { useMe } from "../App";
 import { Avatar } from "../components/Avatar";
-import { XIcon } from "../components/icons";
+import { PaperclipIcon, XIcon } from "../components/icons";
 import { Button } from "../components/Button";
 import { Dialog } from "../components/Dialog";
 import { Tabs } from "../components/Tabs";
@@ -48,24 +48,6 @@ const chipless =
 
 const borderlessSelect =
   "cursor-pointer rounded-lg border-0 bg-transparent px-1 hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring";
-
-function Paperclip() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-    </svg>
-  );
-}
 
 /** Centered modal (bottom sheet on mobile) to add (or edit, when `expense` is given) an expense. Mounted conditionally (fresh state per open). */
 export default function AddExpense({
@@ -124,7 +106,10 @@ export default function AddExpense({
   // Live "remaining / over" indicator; null when not applicable.
   function hint(): string | null {
     if (!amountMinor) return null;
-    if (mode === "equal") return `Split evenly between ${includeSet.size} member${includeSet.size === 1 ? "" : "s"}`;
+    if (mode === "equal")
+      return includeSet.size === 0
+        ? "No members selected"
+        : `Split evenly between ${includeSet.size} member${includeSet.size === 1 ? "" : "s"}`;
     if (mode === "amounts") {
       if (!sameCurrency) return null; // splits are computed on the converted total, unknown client-side
       const diff = amountMinor - perMember().reduce((a, x) => a + x.v * 100, 0);
@@ -304,7 +289,19 @@ export default function AddExpense({
             <span className="text-muted-fg">Split</span>
             <Tabs pills tabs={MODES.map((m) => ({ id: m.id, label: m.label }))} value={mode} onChange={(id) => setMode(id as Mode)} />
             {mode === "equal" ? (
-              <div className="flex flex-wrap justify-center gap-1.5">
+              <>
+                {members.length > 0 && (
+                  <div className="flex justify-center">
+                    <button
+                      type="button"
+                      onClick={() => setIncluded(includeSet.size === members.length ? new Set<number>() : null)}
+                      className={chipless}
+                    >
+                      {includeSet.size === members.length ? "Clear all" : "Select all"}
+                    </button>
+                  </div>
+                )}
+                <div className="flex flex-wrap justify-center gap-1.5">
                 {members.map((m) => (
                   <button
                     key={m.id}
@@ -326,9 +323,27 @@ export default function AddExpense({
                     {m.id === me?.id ? "You" : m.name}
                   </button>
                 ))}
-              </div>
+                </div>
+              </>
             ) : (
               <>
+                {members.length > 0 && (
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSplitMembers(
+                          splitSet.size === members.length
+                            ? new Set<number>([splitRows[0]?.id ?? members[0].id])
+                            : null,
+                        )
+                      }
+                      className={chipless}
+                    >
+                      {splitSet.size === members.length ? "Clear all" : "Select all"}
+                    </button>
+                  </div>
+                )}
                 <ul className="grid gap-1.5">
                   {splitRows.map((m) => (
                     <li key={m.id} className="flex items-center gap-2.5 rounded-lg border border-border bg-card px-3 py-1.5">
@@ -408,7 +423,7 @@ export default function AddExpense({
                 className={`${chipless} cursor-pointer font-medium`}
               />
               <label className={`${chipless} max-w-full`}>
-                <Paperclip />
+                <PaperclipIcon size={14} />
                 <span className="max-w-[9rem] truncate font-medium">{file ? file.name : "Receipt"}</span>
                 <input
                   type="file"

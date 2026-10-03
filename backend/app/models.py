@@ -80,6 +80,7 @@ class Settlement(Base):
     currency: Mapped[str] = mapped_column(String(3))
     rate: Mapped[float | None] = mapped_column()
     date: Mapped[date] = mapped_column(Date)
+    proof_path: Mapped[str | None] = mapped_column(String(255))
 
 
 class Comment(Base):
