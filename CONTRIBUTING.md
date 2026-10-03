@@ -2,6 +2,11 @@
 
 Preferences and conventions for working on this repo (self-hosted Splitwise: FastAPI + React SPA, SQLite, docker-compose).
 
+## Contributors
+
+- **Vishal Dodda** — product owner: requirements, UX direction, and every design call in this document.
+- **opencode** (GLM, built by Z.ai) — implementation: architecture, backend, frontend, tests, deployment, and the CI-style Playwright verification used throughout.
+
 ## Workflow
 
 - Build with the minimum diff that works. No speculative abstractions, no interfaces with one implementation, no deps for what a few lines do. Deliberate shortcuts get a `ponytail:` comment naming the ceiling and upgrade path.
