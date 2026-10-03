@@ -53,3 +53,48 @@ async def init() -> None:
         await conn.run_sync(Base.metadata.create_all)
         await conn.run_sync(_add_missing_columns)
         await conn.execute(text("PRAGMA journal_mode=WAL"))
+        # stamp head so a later `alembic upgrade head` doesn't re-run migrations
+        # that the self-heal already applied (duplicate-column). Raw INSERT
+        # instead of alembic.command.stamp — env.py uses asyncio.run, which
+        # can't run inside the lifespan loop.
+        head = _alembic_head()
+        if head:
+            await conn.execute(
+                text(
+                    "CREATE TABLE IF NOT EXISTS alembic_version "
+                    "(version_num VARCHAR(32) NOT NULL)"
+                )
+            )
+            await conn.execute(
+                text(
+                    "INSERT INTO alembic_version (version_num) "
+                    "SELECT :head WHERE NOT EXISTS "
+                    "(SELECT 1 FROM alembic_version)"
+                ),
+                {"head": head},
+            )
+
+
+def _alembic_head() -> str | None:
+    """Walk the revision chain in alembic/versions to find the head revision id."""
+    from pathlib import Path
+
+    versions = Path(__file__).resolve().parent.parent / "alembic" / "versions"
+    if not versions.is_dir():
+        return None
+    import re
+
+    revs: dict[str, str | None] = {}
+    for path in versions.glob("*.py"):
+        src = path.read_text()
+        rev = re.search(r"^revision\s*=\s*['\"]([^'\"]+)['\"]", src, re.M)
+        down = re.search(r"^down_revision\s*=\s*(.+)$", src, re.M)
+        if not rev:
+            continue
+        down_id = None
+        if down and "None" not in down.group(1):
+            m = re.search(r"['\"]([^'\"]+)['\"]", down.group(1))
+            down_id = m.group(1) if m else None
+        revs[rev.group(1)] = down_id
+    heads = [r for r in revs if r not in set(revs.values())]
+    return heads[0] if len(heads) == 1 else None

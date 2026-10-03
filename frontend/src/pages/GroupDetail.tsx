@@ -568,7 +568,8 @@ function SettleUpDialog({
 }
 
 /** Step-through of every debt where you're the payer, recording one payee at a
- *  time. Uses a snapshot of `debts` (no refetch mid-flow) so the index is stable. */
+ *  time. Debts are snapshotted once at mount so a live refetch can't shift the
+ *  list and make the per-index flow record against the wrong payee. */
 function SettleAllDialog({
   groupId,
   currency,
@@ -583,7 +584,10 @@ function SettleAllDialog({
   const { data: group } = useGroup(groupId);
   const { data: me } = useMe();
   const queryClient = useQueryClient();
-  const myDebts = me ? debts.filter((d) => d.from === me.id) : [];
+  // Snapshot once at mount (lazy initializer) — never re-derived, so background
+  // refetches during the flow can't shift this array. `me` is always loaded by
+  // the time this mounts (RequireAuth gates on it).
+  const [myDebts] = useState(() => (me ? debts.filter((d) => d.from === me.id) : []));
   const [index, setIndex] = useState(0);
   const [amountOverride, setAmountOverride] = useState<string | null>(null);
   const [recorded, setRecorded] = useState<Set<number>>(new Set());
@@ -617,6 +621,8 @@ function SettleAllDialog({
     onSuccess: () => {
       setRecorded((s) => new Set(s).add(current!.to));
       setError("");
+      // Keep balances live during the flow; the snapshot above is unaffected.
+      queryClient.invalidateQueries({ queryKey: ["debts", groupId] });
       if (isLast) close();
       else {
         setIndex(index + 1);
@@ -742,7 +748,7 @@ function BalancesTab({ groupId }: { groupId: string }) {
   return (
     <div>
       <div className="mb-3 flex justify-end gap-2">
-        <Button variant="secondary" onClick={() => setSettleAllOpen(true)}>
+        <Button variant="secondary" disabled={isPending} onClick={() => setSettleAllOpen(true)}>
           Settle all
         </Button>
         <Button variant="secondary" onClick={() => setSettleOpen(true)}>

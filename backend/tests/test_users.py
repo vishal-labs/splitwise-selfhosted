@@ -88,6 +88,68 @@ async def test_patch_name_updates(client):
 # --- UPI QR upload / serve / delete ---
 
 
+async def test_upi_qr_upload_over_5mb_413(client):
+    await _register(client, "a@b.com")
+    r = await client.post(
+        "/api/users/me/upi-qr",
+        files={"file": ("big.png", b"x" * (5 * 1024 * 1024 + 1), "image/png")},
+    )
+    assert r.status_code == 413
+
+
+async def test_upi_qr_replace_unlinks_old_file(client):
+    await _register(client, "a@b.com")
+    r = await client.post(
+        "/api/users/me/upi-qr",
+        files={"file": ("qr.png", b"first", "image/png")},
+    )
+    assert r.status_code == 200
+    upload_dir = os.environ["UPLOAD_DIR"]
+    assert len(os.listdir(upload_dir)) == 1
+
+    r = await client.post(
+        "/api/users/me/upi-qr",
+        files={"file": ("qr.png", b"second", "image/png")},
+    )
+    assert r.status_code == 200
+    assert len(os.listdir(upload_dir)) == 1  # old file unlinked, new one remains
+
+
+async def test_upi_qr_delete_unlinks_file(client):
+    await _register(client, "a@b.com")
+    r = await client.post(
+        "/api/users/me/upi-qr",
+        files={"file": ("qr.png", b"bytes", "image/png")},
+    )
+    assert r.status_code == 200
+    upload_dir = os.environ["UPLOAD_DIR"]
+    assert len(os.listdir(upload_dir)) == 1
+
+    r = await client.delete("/api/users/me/upi-qr")
+    assert r.status_code == 200
+    assert os.listdir(upload_dir) == []
+
+
+async def test_patch_upi_id_over_256_chars_422(client):
+    await _register(client, "a@b.com")
+    r = await client.patch("/api/users/me", json={"upi_id": "a" * 255 + "@x.y"})
+    assert r.status_code == 422
+
+
+async def test_patch_name_whitespace_422(client):
+    await _register(client, "a@b.com")
+    r = await client.patch("/api/users/me", json={"name": "   "})
+    assert r.status_code == 422
+
+
+async def test_patch_name_and_upi_id_stripped(client):
+    await _register(client, "a@b.com")
+    r = await client.patch("/api/users/me", json={"name": " Bob ", "upi_id": " bob@upi "})
+    assert r.status_code == 200, r.text
+    assert r.json()["name"] == "Bob"
+    assert r.json()["upi_id"] == "bob@upi"
+
+
 async def test_upi_qr_upload_and_get_roundtrip(client):
     _, user_id = await _register(client, "a@b.com")
     payload = b"\x89PNG fake qr bytes"

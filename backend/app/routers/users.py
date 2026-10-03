@@ -1,3 +1,4 @@
+import os
 import re
 import uuid
 from pathlib import Path
@@ -93,16 +94,27 @@ async def upload_upi_qr(
     ext = file.filename.rsplit(".", 1)[-1].lower() if file.filename and "." in file.filename else ""
     if ext not in ALLOWED_EXTS:
         raise HTTPException(422, "Allowed: png/jpg/jpeg/webp/pdf")
-    data = await file.read()
-    if len(data) > MAX_SIZE:
-        raise HTTPException(413, "Max 5MB")
+    # chunked read so an oversized body 413s before it's fully buffered in memory
+    size = 0
+    chunks: list[bytes] = []
+    while chunk := await file.read(1024 * 1024):
+        size += len(chunk)
+        if size > MAX_SIZE:
+            raise HTTPException(413, "Max 5MB")
+        chunks.append(chunk)
 
     directory = Path(settings.upload_dir)
     directory.mkdir(parents=True, exist_ok=True)
     name = f"{uuid.uuid4().hex}.{ext}"
-    (directory / name).write_bytes(data)
+    (directory / name).write_bytes(b"".join(chunks))
+    old = user.upi_qr_path
     user.upi_qr_path = name
     await db.commit()
+    if old:
+        try:
+            os.unlink(Path(settings.upload_dir) / old)
+        except FileNotFoundError:
+            pass
     return {"has_upi_qr": True}
 
 
@@ -111,8 +123,14 @@ async def delete_upi_qr(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    old = user.upi_qr_path
     user.upi_qr_path = None
     await db.commit()
+    if old:
+        try:
+            os.unlink(Path(settings.upload_dir) / old)
+        except FileNotFoundError:
+            pass
     return {"ok": True}
 
 

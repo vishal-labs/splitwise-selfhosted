@@ -2,7 +2,7 @@ from datetime import date as Date
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from app.models import User
 
@@ -20,7 +20,12 @@ class UserLogin(BaseModel):
 
 class UserUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
-    upi_id: str | None = None
+    upi_id: str | None = Field(default=None, max_length=256)
+
+    @field_validator("name", "upi_id", mode="before")
+    @classmethod
+    def _strip(cls, v: object) -> object:
+        return v.strip() if isinstance(v, str) else v
 
 
 class UserOut(BaseModel):
