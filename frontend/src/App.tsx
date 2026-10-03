@@ -48,9 +48,25 @@ function Shell() {
     <div className="min-h-dvh">
       <header className="sticky top-0 z-10 border-b border-border bg-bg/80 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-3xl items-center justify-between px-4">
-          <NavLink to="/" className="font-semibold">
-            Splitwise
-          </NavLink>
+          <div className="flex items-center gap-4">
+            <NavLink to="/" className="font-semibold">
+              Splitwise
+            </NavLink>
+            <nav aria-label="Primary" className="hidden items-center gap-1 md:flex">
+              {tabs.map((t) => (
+                <NavLink
+                  key={t.to}
+                  to={t.to}
+                  end={t.end}
+                  className={({ isActive }) =>
+                    `rounded-md px-3 py-1.5 text-sm ${isActive ? "bg-muted font-medium text-fg" : "text-muted-fg hover:text-fg"}`
+                  }
+                >
+                  {t.label}
+                </NavLink>
+              ))}
+            </nav>
+          </div>
           {me && (
             <>
               <button
