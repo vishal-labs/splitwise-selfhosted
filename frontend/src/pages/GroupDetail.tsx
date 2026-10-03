@@ -416,12 +416,12 @@ function MemberProfileDialog({
 function SettleUpDialog({
   groupId,
   currency,
-  initial,
+  debts,
   onClose,
 }: {
   groupId: string;
   currency: string;
-  initial: Debt | undefined;
+  debts: Debt[];
   onClose: () => void;
 }) {
   const { data: group } = useGroup(groupId);
@@ -429,7 +429,8 @@ function SettleUpDialog({
   const queryClient = useQueryClient();
   const [error, setError] = useState("");
   const [payeeId, setPayeeId] = useState<number | null>(null);
-  const [amount, setAmount] = useState(initial ? (initial.amount / 100).toFixed(2) : "");
+  // null until the user edits; the field follows the selected payee's debt
+  const [amountOverride, setAmountOverride] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   const settle = useMutation({
@@ -442,10 +443,13 @@ function SettleUpDialog({
     onError: (e) => setError(e instanceof Error ? e.message : "Something went wrong"),
   });
 
+  const myDebts = me ? debts.filter((d) => d.from === me.id) : [];
   const defaultPayeeId =
-    initial && initial.from === me?.id ? initial.to : group?.members.find((m) => m.id !== me?.id)?.id;
-  const selectedPayeeId = payeeId ?? defaultPayeeId ?? null;
+    myDebts[0]?.to ?? group?.members.find((m) => m.id !== me?.id)?.id ?? null;
+  const selectedPayeeId = payeeId ?? defaultPayeeId;
   const payee = group?.members.find((m) => m.id === selectedPayeeId);
+  const selectedDebt = myDebts.find((d) => d.to === selectedPayeeId);
+  const amount = amountOverride ?? (selectedDebt ? (selectedDebt.amount / 100).toFixed(2) : "");
   const amountMinor = Math.round((parseFloat(amount) || 0) * 100);
   const payeeVpa = payee?.upi_id && isValidVpa(payee.upi_id) ? payee.upi_id : null;
   const note = `Splitwise settle up: ${me?.name ?? ""} -> ${payee?.name ?? ""} . ${group?.name ?? ""}`.slice(0, 50);
@@ -488,7 +492,10 @@ function SettleUpDialog({
             <select
               name="payee_id"
               value={selectedPayeeId ?? ""}
-              onChange={(e) => setPayeeId(Number(e.target.value))}
+              onChange={(e) => {
+                setPayeeId(Number(e.target.value));
+                setAmountOverride(null);
+              }}
               className="menu-select h-9 text-sm"
               required
             >
@@ -516,7 +523,7 @@ function SettleUpDialog({
             autoComplete="off"
             required
             value={amount}
-            onChange={(e) => setAmount(e.target.value)}
+            onChange={(e) => setAmountOverride(e.target.value)}
           />
         </label>
         {showUpi && payee && (
@@ -599,7 +606,7 @@ function BalancesTab({ groupId }: { groupId: string }) {
         <SettleUpDialog
           groupId={groupId}
           currency={group?.currency ?? "INR"}
-          initial={debts?.[0]}
+          debts={debts ?? []}
           onClose={() => setSettleOpen(false)}
         />
       )}
