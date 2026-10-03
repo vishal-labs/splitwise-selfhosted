@@ -221,7 +221,7 @@ export const deleteGroup = (id: number | string) =>
 
 // --- UPI payments (appended to minimize merge conflict) ---
 
-export const updateMe = (body: { name?: string; upi_id?: string | null }) =>
+export const updateMe = (body: { name?: string; email?: string; upi_id?: string | null }) =>
   api<User>("/users/me", { method: "PATCH", body });
 
 export const uploadUpiQr = (file: File) => {
@@ -233,3 +233,8 @@ export const uploadUpiQr = (file: File) => {
 export const deleteUpiQr = () => api<{ ok: boolean }>("/users/me/upi-qr", { method: "DELETE" });
 
 export const upiQrUrl = (userId: number) => `/api/users/${userId}/upi-qr`;
+
+// --- Profile + password (appended to minimize merge conflict) ---
+
+export const changePassword = (body: { current_password: string; new_password: string }) =>
+  api<void>("/users/me/password", { method: "POST", body });

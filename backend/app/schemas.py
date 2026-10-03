@@ -19,6 +19,7 @@ class UserLogin(BaseModel):
 
 
 class UserUpdate(BaseModel):
+    email: EmailStr | None = None
     name: str | None = Field(default=None, min_length=1, max_length=255)
     upi_id: str | None = Field(default=None, max_length=256)
 
@@ -26,6 +27,11 @@ class UserUpdate(BaseModel):
     @classmethod
     def _strip(cls, v: object) -> object:
         return v.strip() if isinstance(v, str) else v
+
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=8, max_length=128)
 
 
 class UserOut(BaseModel):

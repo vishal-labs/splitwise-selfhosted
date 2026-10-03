@@ -20,7 +20,7 @@ from app.auth import (
 )
 from app.config import settings
 from app.models import Membership, User
-from app.schemas import UserCreate, UserLogin, UserOut, UserUpdate, user_out
+from app.schemas import PasswordChange, UserCreate, UserLogin, UserOut, UserUpdate, user_out
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
@@ -76,6 +76,12 @@ async def update_me(
     data = payload.model_dump(exclude_unset=True)
     if data.get("upi_id") is not None and not VPA_RE.match(data["upi_id"]):
         raise HTTPException(422, "Invalid UPI ID")
+    if "email" in data and data["email"] != user.email:
+        # ponytail: no password re-entry on email change — self-hosted, single admin-ish user base
+        taken = await db.scalar(select(User).where(User.email == data["email"]))
+        if taken is not None:
+            raise HTTPException(status.HTTP_409_CONFLICT, "Email already registered")
+        user.email = data["email"]
     if data.get("name") is not None:
         user.name = data["name"]
     if "upi_id" in data:
@@ -83,6 +89,27 @@ async def update_me(
     await db.commit()
     await db.refresh(user)
     return user_out(user)
+
+
+@router.post("/me/password")
+async def change_password(
+    payload: PasswordChange,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if not verify_password(user, payload.current_password):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Current password is incorrect")
+    user.password_hash = pwd.hash(payload.new_password)
+    token = request.cookies.get(COOKIE)
+    current_hash = hash_token(token) if token else ""
+    await db.execute(
+        delete(Session).where(
+            Session.user_id == user.id, Session.token_hash != current_hash
+        )
+    )
+    await db.commit()
+    return {"ok": True}
 
 
 @router.post("/me/upi-qr")

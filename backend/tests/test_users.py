@@ -85,6 +85,99 @@ async def test_patch_name_updates(client):
     assert r.json()["upi_id"] == "name@bank"  # absent upi_id is a no-op
 
 
+# --- PATCH email ---
+
+
+async def test_patch_email_unique_200(client):
+    await _register(client, "a@b.com")
+    r = await client.patch("/api/users/me", json={"email": "new@a.com"})
+    assert r.status_code == 200, r.text
+    assert r.json()["email"] == "new@a.com"
+
+    r = await client.get("/api/users/me")
+    assert r.json()["email"] == "new@a.com"
+
+
+async def test_patch_email_taken_409(client):
+    await _register(client, "a@b.com")
+    await _register(client, "b@b.com")
+    r = await client.patch("/api/users/me", json={"email": "a@b.com"})
+    assert r.status_code == 409
+
+
+async def test_patch_email_invalid_422(client):
+    await _register(client, "a@b.com")
+    r = await client.patch("/api/users/me", json={"email": "not-an-email"})
+    assert r.status_code == 422
+
+
+# --- POST /users/me/password ---
+
+
+async def test_password_change_wrong_current_401(client):
+    await _register(client, "a@b.com")
+    r = await client.post(
+        "/api/users/me/password",
+        json={"current_password": "wrongpass1", "new_password": "newpass1234"},
+    )
+    assert r.status_code == 401
+    assert "Current password is incorrect" in r.text
+
+
+async def test_password_change_success_old_fails_new_logs_in(client):
+    token, _ = await _register(client, "a@b.com")
+    r = await client.post(
+        "/api/users/me/password",
+        json={"current_password": "hunter2hunter", "new_password": "newpass1234"},
+    )
+    assert r.status_code == 200, r.text
+
+    client.cookies.clear()
+    r = await client.post(
+        "/api/users/login", json={"email": "a@b.com", "password": "hunter2hunter"}
+    )
+    assert r.status_code == 401
+
+    r = await client.post(
+        "/api/users/login", json={"email": "a@b.com", "password": "newpass1234"}
+    )
+    assert r.status_code == 200
+
+
+async def test_password_change_invalidates_other_sessions(client):
+    token_a, _ = await _register(client, "a@b.com")
+    # second session for same user
+    r = await client.post(
+        "/api/users/login", json={"email": "a@b.com", "password": "hunter2hunter"}
+    )
+    token_b = r.cookies["session"]
+
+    await _switch(client, token_a)
+    r = await client.post(
+        "/api/users/me/password",
+        json={"current_password": "hunter2hunter", "new_password": "newpass1234"},
+    )
+    assert r.status_code == 200, r.text
+
+    # current session survives
+    r = await client.get("/api/users/me")
+    assert r.status_code == 200
+
+    # other session is dead
+    await _switch(client, token_b)
+    r = await client.get("/api/users/me")
+    assert r.status_code == 401
+
+
+async def test_password_change_new_too_short_422(client):
+    await _register(client, "a@b.com")
+    r = await client.post(
+        "/api/users/me/password",
+        json={"current_password": "hunter2hunter", "new_password": "short"},
+    )
+    assert r.status_code == 422
+
+
 # --- UPI QR upload / serve / delete ---
 
 

@@ -47,6 +47,18 @@ cd backend && uv run pytest
 | `UPLOAD_DIR` | `./data/uploads` | Receipt storage |
 | `SESSION_TTL_DAYS` | `30` | Session cookie lifetime |
 
+## Admin CLI
+
+Run inside the api container:
+
+```sh
+# Reset a user's password (prompts twice, no echo)
+docker compose exec api uv run python -m app.cli reset-password user@example.com
+
+# List all users
+docker compose exec api uv run python -m app.cli list-users
+```
+
 ## Backup
 
 All state lives in the named volume `data` (SQLite DB + receipts):
