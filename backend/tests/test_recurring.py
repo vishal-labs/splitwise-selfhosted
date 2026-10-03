@@ -135,14 +135,17 @@ async def test_materialize_due_creates_expense(client, db):
 
 
 async def test_materialize_due_future_rule_skipped(client, db):
+    # Derive the date from today so this stays in the future as the clock advances;
+    # a hardcoded date silently becomes past and materializes the rule.
+    future = dt.date.today() + dt.timedelta(days=30)
     rule_id, _, _, _ = await _setup_rule(
-        client, db, freq="monthly", day=15, next_run=dt.date(2026, 10, 1)  # future
+        client, db, freq="monthly", day=15, next_run=future
     )
     materialize_due = _materialize_due()
     assert await materialize_due(db) == 0
     from app.models import RecurringRule
     rule = await db.get(RecurringRule, rule_id)
-    assert rule.next_run == dt.date(2026, 10, 1)
+    assert rule.next_run == future
     from sqlalchemy import select
     from app.models import Expense
     expenses = (

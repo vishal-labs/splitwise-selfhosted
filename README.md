@@ -45,7 +45,6 @@ cd backend && uv run pytest
 |---|---|---|
 | `DATABASE_URL` | `sqlite+aiosqlite:///./data/app.db` | SQLite (WAL). In Docker set to `sqlite+aiosqlite:////data/app.db` |
 | `UPLOAD_DIR` | `./data/uploads` | Receipt storage |
-| `BASE_CURRENCY` | `USD` | Group default currency |
 | `SESSION_TTL_DAYS` | `30` | Session cookie lifetime |
 
 ## Backup

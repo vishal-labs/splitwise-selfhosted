@@ -14,7 +14,6 @@ from app.auth import (
 )
 from app.models import User
 from app.schemas import UserCreate, UserLogin, UserOut, user_out
-from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 

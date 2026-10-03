@@ -6,7 +6,6 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite+aiosqlite:///./data/app.db"
     session_ttl_days: int = 30
-    base_currency: str = "USD"
     upload_dir: str = "./data/uploads"
 
 
