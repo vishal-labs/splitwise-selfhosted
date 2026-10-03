@@ -28,6 +28,7 @@ import { Button } from "../components/Button";
 import { Dialog } from "../components/Dialog";
 import { EmptyState } from "../components/EmptyState";
 import { Input } from "../components/Input";
+import { PaymentForm } from "../components/PaymentForm";
 import { Sheet } from "../components/Sheet";
 import { Tabs } from "../components/Tabs";
 import { formatMinor } from "../format";
@@ -357,6 +358,7 @@ function MemberProfileDialog({
   groupName: string;
   onClose: () => void;
 }) {
+  const { data: me } = useMe();
   const [copied, setCopied] = useState(false);
   const vpa = member.upi_id && isValidVpa(member.upi_id) ? member.upi_id : null;
 
@@ -365,6 +367,14 @@ function MemberProfileDialog({
     await navigator.clipboard.writeText(vpa);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  }
+
+  if (me && member.id === me.id) {
+    return (
+      <Dialog open onClose={onClose} title="Your payment details">
+        <PaymentForm me={me} />
+      </Dialog>
+    );
   }
 
   return (

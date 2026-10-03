@@ -8,6 +8,7 @@ import { Button } from "../components/Button";
 import { Dialog } from "../components/Dialog";
 import { EmptyState } from "../components/EmptyState";
 import { Input } from "../components/Input";
+import { PaymentForm } from "../components/PaymentForm";
 import { formatMinor } from "../format";
 
 /** Your net balance in one group: sum of debts where you're the payee minus payer. */
@@ -77,6 +78,7 @@ export default function Dashboard() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
+  const [paymentOpen, setPaymentOpen] = useState(false);
   const [error, setError] = useState("");
   const [joinError, setJoinError] = useState("");
 
@@ -145,6 +147,15 @@ export default function Dashboard() {
         </p>
       )}
 
+      {me && !me.upi_id && !me.has_upi_qr && (
+        <div className="mt-4 flex items-center justify-between gap-3 rounded-card border border-border bg-card p-3">
+          <p className="text-sm text-muted-fg">Get paid faster — add your UPI ID.</p>
+          <Button variant="secondary" onClick={() => setPaymentOpen(true)}>
+            Add UPI
+          </Button>
+        </div>
+      )}
+
       {groups && groups.length > 0 ? (
         <div className="mt-4 grid gap-2">
           {groups.map((g) => (
@@ -198,6 +209,12 @@ export default function Dashboard() {
           </Button>
         </form>
       </Dialog>
+
+      {me && (
+        <Dialog open={paymentOpen} onClose={() => setPaymentOpen(false)} title="Payment details">
+          <PaymentForm me={me} />
+        </Dialog>
+      )}
     </div>
   );
 }
