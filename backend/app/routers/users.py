@@ -1,4 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+import re
+import uuid
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,10 +17,15 @@ from app.auth import (
     pwd,
     verify_password,
 )
-from app.models import User
-from app.schemas import UserCreate, UserLogin, UserOut, user_out
+from app.config import settings
+from app.models import Membership, User
+from app.schemas import UserCreate, UserLogin, UserOut, UserUpdate, user_out
 
 router = APIRouter(prefix="/api/users", tags=["users"])
+
+VPA_RE = re.compile(r"^[A-Za-z0-9.\-_]{2,}@[A-Za-z0-9.\-]{2,}$")
+ALLOWED_EXTS = {"png", "jpg", "jpeg", "webp", "pdf"}
+MAX_SIZE = 5 * 1024 * 1024
 
 
 @router.post("/register", response_model=UserOut)
@@ -54,3 +64,79 @@ async def logout(request: Request, db: AsyncSession = Depends(get_db)):
 @router.get("/me", response_model=UserOut)
 async def me(user: User = Depends(get_current_user)):
     return user_out(user)
+
+
+@router.patch("/me", response_model=UserOut)
+async def update_me(
+    payload: UserUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    data = payload.model_dump(exclude_unset=True)
+    if data.get("upi_id") is not None and not VPA_RE.match(data["upi_id"]):
+        raise HTTPException(422, "Invalid UPI ID")
+    if data.get("name") is not None:
+        user.name = data["name"]
+    if "upi_id" in data:
+        user.upi_id = data["upi_id"]
+    await db.commit()
+    await db.refresh(user)
+    return user_out(user)
+
+
+@router.post("/me/upi-qr")
+async def upload_upi_qr(
+    file: UploadFile,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    ext = file.filename.rsplit(".", 1)[-1].lower() if file.filename and "." in file.filename else ""
+    if ext not in ALLOWED_EXTS:
+        raise HTTPException(422, "Allowed: png/jpg/jpeg/webp/pdf")
+    data = await file.read()
+    if len(data) > MAX_SIZE:
+        raise HTTPException(413, "Max 5MB")
+
+    directory = Path(settings.upload_dir)
+    directory.mkdir(parents=True, exist_ok=True)
+    name = f"{uuid.uuid4().hex}.{ext}"
+    (directory / name).write_bytes(data)
+    user.upi_qr_path = name
+    await db.commit()
+    return {"has_upi_qr": True}
+
+
+@router.delete("/me/upi-qr")
+async def delete_upi_qr(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    user.upi_qr_path = None
+    await db.commit()
+    return {"ok": True}
+
+
+@router.get("/{user_id}/upi-qr")
+async def get_user_upi_qr(
+    user_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if user_id != user.id:
+        shared = await db.scalar(
+            select(Membership).where(
+                Membership.user_id == user.id,
+                Membership.group_id.in_(
+                    select(Membership.group_id).where(Membership.user_id == user_id)
+                ),
+            )
+        )
+        if shared is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND)
+    target = await db.get(User, user_id)
+    if target is None or not target.upi_qr_path:
+        raise HTTPException(status.HTTP_404_NOT_FOUND)
+    path = Path(settings.upload_dir) / target.upi_qr_path
+    if not path.is_file():
+        raise HTTPException(status.HTTP_404_NOT_FOUND)
+    return FileResponse(path)

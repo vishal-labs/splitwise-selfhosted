@@ -8,6 +8,7 @@ import { Button } from "../components/Button";
 import { Dialog } from "../components/Dialog";
 import { EmptyState } from "../components/EmptyState";
 import { Input } from "../components/Input";
+import { PaymentForm } from "../components/PaymentForm";
 import { formatMinor } from "../format";
 
 /** Your net balance in one group: sum of debts where you're the payee minus payer. */
@@ -77,6 +78,7 @@ export default function Dashboard() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
+  const [paymentOpen, setPaymentOpen] = useState(false);
   const [error, setError] = useState("");
   const [joinError, setJoinError] = useState("");
 
@@ -104,7 +106,7 @@ export default function Dashboard() {
     const data = new FormData(e.currentTarget);
     create.mutate({
       name: (data.get("name") as string).trim(),
-      currency: ((data.get("currency") as string) || "USD").trim().toUpperCase(),
+      currency: ((data.get("currency") as string) || "INR").trim().toUpperCase(),
     });
   }
 
@@ -133,16 +135,25 @@ export default function Dashboard() {
         <p className="mt-2 text-sm font-medium">
           {owed > 0 && (
             <span className="text-success">
-              You're owed {formatMinor(owed, groups?.[0]?.currency ?? "USD")}
+              You're owed {formatMinor(owed, groups?.[0]?.currency ?? "INR")}
             </span>
           )}
           {owed > 0 && owe > 0 && <span className="text-muted-fg"> · </span>}
           {owe > 0 && (
             <span className="text-destructive">
-              You owe {formatMinor(owe, groups?.[0]?.currency ?? "USD")}
+              You owe {formatMinor(owe, groups?.[0]?.currency ?? "INR")}
             </span>
           )}
         </p>
+      )}
+
+      {me && !me.upi_id && !me.has_upi_qr && (
+        <div className="mt-4 flex items-center justify-between gap-3 rounded-card border border-border bg-card p-3">
+          <p className="text-sm text-muted-fg">Get paid faster — add your UPI ID.</p>
+          <Button variant="secondary" onClick={() => setPaymentOpen(true)}>
+            Add UPI
+          </Button>
+        </div>
       )}
 
       {groups && groups.length > 0 ? (
@@ -169,7 +180,7 @@ export default function Dashboard() {
           </label>
           <label className="grid gap-1.5 text-sm">
             Currency
-            <Input name="currency" defaultValue="USD" required pattern="[A-Za-z]{3}" title="3-letter currency code" />
+            <Input name="currency" defaultValue="INR" required pattern="[A-Za-z]{3}" title="3-letter currency code" />
           </label>
           {error && (
             <p role="alert" className="text-sm text-destructive">
@@ -198,6 +209,12 @@ export default function Dashboard() {
           </Button>
         </form>
       </Dialog>
+
+      {me && (
+        <Dialog open={paymentOpen} onClose={() => setPaymentOpen(false)} title="Payment details">
+          <PaymentForm me={me} />
+        </Dialog>
+      )}
     </div>
   );
 }

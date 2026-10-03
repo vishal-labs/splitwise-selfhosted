@@ -16,7 +16,7 @@ import { Dialog } from "../components/Dialog";
 import { Tabs } from "../components/Tabs";
 
 // ponytail: backend has no GET /api/rates router yet (services/rates.py exists, no endpoint) — static list until it does
-const CURRENCIES = ["USD", "EUR", "GBP", "INR", "JPY", "CAD", "AUD", "CHF", "CNY", "SGD", "SEK", "NZD"];
+const CURRENCIES = ["INR", "USD", "EUR", "GBP", "JPY", "CAD", "AUD", "CHF", "CNY", "SGD", "SEK", "NZD"];
 const CATEGORIES = ["Groceries", "Food", "Rent", "Utilities", "Travel", "Other"];
 const MODES = [
   { id: "equal", label: "Equal" },
@@ -94,7 +94,7 @@ export default function AddExpense({
   // Members listed in amounts/percent/shares rows; null = "all" default (edit mode: existing splits).
   const [splitMembers, setSplitMembers] = useState<Set<number> | null>(null);
   const [values, setValues] = useState<Record<number, string>>({});
-  const [currency, setCurrency] = useState<string>(expense?.currency ?? group?.currency ?? "USD");
+  const [currency, setCurrency] = useState<string>(expense?.currency ?? group?.currency ?? "INR");
   const [date, setDate] = useState(expense?.date ?? new Date().toLocaleDateString("en-CA")); // YYYY-MM-DD, local time
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState("");
@@ -103,7 +103,7 @@ export default function AddExpense({
   const [frequency, setFrequency] = useState<Frequency>("monthly");
   const [repeatDay, setRepeatDay] = useState("1");
 
-  const groupCurrency = group?.currency ?? "USD";
+  const groupCurrency = group?.currency ?? "INR";
   const sameCurrency = currency === groupCurrency;
   const payer = payerId ?? me?.id ?? members[0]?.id ?? 0;
   // ponytail: edits prefill as equal-split over the expense's split members; per-mode prefill not worth it

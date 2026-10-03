@@ -50,7 +50,13 @@ export async function api<T>(path: string, opts: Opts = {}): Promise<T> {
 
 import { useQuery } from "@tanstack/react-query";
 
-export type User = { id: number; email: string; name: string };
+export type User = {
+  id: number;
+  email: string;
+  name: string;
+  upi_id: string | null;
+  has_upi_qr: boolean;
+};
 
 /** Current session; null when logged out (401). */
 export async function getMe(): Promise<User | null> {
@@ -212,3 +218,18 @@ export const useActivity = (groupId: number | string) =>
 
 export const deleteGroup = (id: number | string) =>
   api<{ ok: boolean }>(`/groups/${id}`, { method: "DELETE" });
+
+// --- UPI payments (appended to minimize merge conflict) ---
+
+export const updateMe = (body: { name?: string; upi_id?: string | null }) =>
+  api<User>("/users/me", { method: "PATCH", body });
+
+export const uploadUpiQr = (file: File) => {
+  const form = new FormData();
+  form.append("file", file);
+  return api<{ has_upi_qr: boolean }>("/users/me/upi-qr", { method: "POST", form });
+};
+
+export const deleteUpiQr = () => api<{ ok: boolean }>("/users/me/upi-qr", { method: "DELETE" });
+
+export const upiQrUrl = (userId: number) => `/api/users/${userId}/upi-qr`;

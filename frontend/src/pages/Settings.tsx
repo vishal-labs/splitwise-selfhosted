@@ -3,6 +3,7 @@ import { useMe } from "../App";
 import { Avatar } from "../components/Avatar";
 import { Button } from "../components/Button";
 import { EmptyState } from "../components/EmptyState";
+import { PaymentForm } from "../components/PaymentForm";
 
 async function downloadCsv(groupId: number, name: string) {
   const res = await fetch(`/api/groups/${groupId}/export.csv`, { credentials: "include" });
@@ -59,6 +60,15 @@ export default function Settings() {
           </ul>
         )}
       </section>
+
+      {me && (
+        <section aria-label="Payment" className="mt-6">
+          <h2 className="font-medium">Payment</h2>
+          <div className="mt-3">
+            <PaymentForm me={me} />
+          </div>
+        </section>
+      )}
 
       <section aria-label="Appearance" className="mt-6">
         <h2 className="font-medium">Appearance</h2>

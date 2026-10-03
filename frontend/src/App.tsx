@@ -4,6 +4,8 @@ import { Navigate, NavLink, Outlet, Route, Routes, useNavigate, useParams } from
 import { api, getMe, joinGroup } from "./api";
 import { Avatar } from "./components/Avatar";
 import { Button } from "./components/Button";
+import { Dialog } from "./components/Dialog";
+import { PaymentForm } from "./components/PaymentForm";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
@@ -35,6 +37,7 @@ function Shell() {
   const { data: me } = useMe();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const [paymentOpen, setPaymentOpen] = useState(false);
 
   const logout = useMutation({
     mutationFn: () => api("/users/logout", { method: "POST" }),
@@ -48,9 +51,25 @@ function Shell() {
     <div className="min-h-dvh">
       <header className="sticky top-0 z-10 border-b border-border bg-bg/80 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-3xl items-center justify-between px-4">
-          <NavLink to="/" className="font-semibold">
-            Splitwise
-          </NavLink>
+          <div className="flex items-center gap-4">
+            <NavLink to="/" className="font-semibold">
+              Splitwise
+            </NavLink>
+            <nav aria-label="Primary" className="hidden items-center gap-1 md:flex">
+              {tabs.map((t) => (
+                <NavLink
+                  key={t.to}
+                  to={t.to}
+                  end={t.end}
+                  className={({ isActive }) =>
+                    `rounded-md px-3 py-1.5 text-sm ${isActive ? "bg-muted font-medium text-fg" : "text-muted-fg hover:text-fg"}`
+                  }
+                >
+                  {t.label}
+                </NavLink>
+              ))}
+            </nav>
+          </div>
           {me && (
             <>
               <button
@@ -69,6 +88,16 @@ function Shell() {
                   <p className="truncate text-sm font-medium">{me.name}</p>
                   <p className="truncate text-xs text-muted-fg">{me.email}</p>
                 </div>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start"
+                  onClick={() => {
+                    (document.getElementById("user-menu") as HTMLElement | null)?.hidePopover?.();
+                    setPaymentOpen(true);
+                  }}
+                >
+                  Payment details
+                </Button>
                 <Button variant="ghost" className="w-full justify-start" onClick={() => logout.mutate()}>
                   Log out
                 </Button>
@@ -77,6 +106,12 @@ function Shell() {
           )}
         </div>
       </header>
+
+      {me && (
+        <Dialog open={paymentOpen} onClose={() => setPaymentOpen(false)} title="Payment details">
+          <PaymentForm me={me} />
+        </Dialog>
+      )}
 
       <main className="mx-auto max-w-3xl px-4 pb-24 pt-6 md:pb-10">
         <Outlet />

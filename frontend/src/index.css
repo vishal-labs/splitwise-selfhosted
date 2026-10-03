@@ -35,6 +35,15 @@ body {
   from { transform: translateX(100%); }
 }
 
+/* Guided settle-all: fade/slide each step in as it mounts (keyed on index). */
+@keyframes step-in {
+  from { opacity: 0; transform: translateX(0.75rem); }
+}
+.settle-step { animation: step-in 0.2s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .settle-step { animation: none; }
+}
+
 /* Expense modal: centered dialog on desktop, bottom sheet on small screens.
    Entry/exit animation via @starting-style + allow-discrete (no JS); browsers
    without support just show/hide instantly. */

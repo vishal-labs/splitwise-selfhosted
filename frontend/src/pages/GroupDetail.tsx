@@ -10,6 +10,7 @@ import {
   deleteGroup,
   getComments,
   removeMember,
+  upiQrUrl,
   useGroup,
   useGroupDebts,
   useGroupExpenses,
@@ -18,6 +19,8 @@ import {
   type Expense,
   type Member,
 } from "../api";
+import { QRCodeSVG } from "qrcode.react";
+import { buildUpiUri, isValidVpa } from "../upi";
 import { useMe } from "../App";
 import { Avatar } from "../components/Avatar";
 import { CheckIcon, CopyIcon, PencilIcon, PlusIcon, RepeatIcon, TrashIcon, XIcon } from "../components/icons";
@@ -25,6 +28,7 @@ import { Button } from "../components/Button";
 import { Dialog } from "../components/Dialog";
 import { EmptyState } from "../components/EmptyState";
 import { Input } from "../components/Input";
+import { PaymentForm } from "../components/PaymentForm";
 import { Sheet } from "../components/Sheet";
 import { Tabs } from "../components/Tabs";
 import { formatMinor } from "../format";
@@ -345,15 +349,79 @@ function ExpensesTab({
   );
 }
 
+function MemberProfileDialog({
+  member,
+  groupName,
+  onClose,
+}: {
+  member: Member;
+  groupName: string;
+  onClose: () => void;
+}) {
+  const { data: me } = useMe();
+  const [copied, setCopied] = useState(false);
+  const vpa = member.upi_id && isValidVpa(member.upi_id) ? member.upi_id : null;
+
+  async function copy() {
+    if (!vpa) return;
+    await navigator.clipboard.writeText(vpa);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  if (me && member.id === me.id) {
+    return (
+      <Dialog open onClose={onClose} title="Your payment details">
+        <PaymentForm me={me} />
+      </Dialog>
+    );
+  }
+
+  return (
+    <Dialog open onClose={onClose} title={member.name}>
+      {!vpa && !member.has_upi_qr ? (
+        <p className="text-sm text-muted-fg">No UPI set up</p>
+      ) : (
+        <div className="grid gap-4">
+          {vpa && (
+            <div className="flex items-center justify-between gap-2 rounded-card border border-border bg-card p-3">
+              <span className="min-w-0 truncate text-sm">{vpa}</span>
+              <Button variant="secondary" onClick={() => void copy()}>
+                {copied ? <CheckIcon size={16} /> : <CopyIcon size={16} />}
+                <span className="max-sm:hidden">{copied ? "Copied" : "Copy UPI ID"}</span>
+              </Button>
+            </div>
+          )}
+          {vpa ? (
+            <div className="flex justify-center">
+              <QRCodeSVG
+                value={buildUpiUri({ vpa, payeeName: member.name, note: `Splitwise: ${groupName}` })}
+                size={200}
+                className="h-auto max-w-full"
+              />
+            </div>
+          ) : (
+            <img
+              src={upiQrUrl(member.id)}
+              alt={`${member.name} UPI QR`}
+              className="mx-auto max-h-64 max-w-full rounded-card border border-border object-contain"
+            />
+          )}
+        </div>
+      )}
+    </Dialog>
+  );
+}
+
 function SettleUpDialog({
   groupId,
   currency,
-  initial,
+  debts,
   onClose,
 }: {
   groupId: string;
   currency: string;
-  initial: Debt | undefined;
+  debts: Debt[];
   onClose: () => void;
 }) {
   const { data: group } = useGroup(groupId);
@@ -361,6 +429,9 @@ function SettleUpDialog({
   const queryClient = useQueryClient();
   const [error, setError] = useState("");
   const [payeeId, setPayeeId] = useState<number | null>(null);
+  // null until the user edits; the field follows the selected payee's debt
+  const [amountOverride, setAmountOverride] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const settle = useMutation({
     mutationFn: (body: { payer_id: number; payee_id: number; amount_minor: number }) =>
@@ -372,17 +443,36 @@ function SettleUpDialog({
     onError: (e) => setError(e instanceof Error ? e.message : "Something went wrong"),
   });
 
+  const myDebts = me ? debts.filter((d) => d.from === me.id) : [];
+  const defaultPayeeId =
+    myDebts[0]?.to ?? group?.members.find((m) => m.id !== me?.id)?.id ?? null;
+  const selectedPayeeId = payeeId ?? defaultPayeeId;
+  const payee = group?.members.find((m) => m.id === selectedPayeeId);
+  const selectedDebt = myDebts.find((d) => d.to === selectedPayeeId);
+  const amount = amountOverride ?? (selectedDebt ? (selectedDebt.amount / 100).toFixed(2) : "");
+  const amountMinor = Math.round((parseFloat(amount) || 0) * 100);
+  const payeeVpa = payee?.upi_id && isValidVpa(payee.upi_id) ? payee.upi_id : null;
+  const note = `Splitwise settle up: ${me?.name ?? ""} -> ${payee?.name ?? ""} . ${group?.name ?? ""}`.slice(0, 50);
+  const showUpi = amountMinor > 0 && !!payee && (!!payeeVpa || payee.has_upi_qr);
+  const uri = payeeVpa ? buildUpiUri({ vpa: payeeVpa, payeeName: payee?.name ?? "", amountMinor, note }) : "";
+
+  async function copyVpa() {
+    if (!payeeVpa) return;
+    await navigator.clipboard.writeText(payeeVpa);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
   function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const data = new FormData(e.currentTarget);
-    const amountMinor = Math.round((parseFloat(data.get("amount") as string) || 0) * 100);
     if (!(amountMinor > 0)) {
       setError("Amount must be greater than zero");
       return;
     }
     settle.mutate({
       payer_id: Number(data.get("payer_id")),
-      payee_id: payeeId ?? 0,
+      payee_id: selectedPayeeId ?? 0,
       amount_minor: amountMinor,
     });
   }
@@ -401,8 +491,11 @@ function SettleUpDialog({
             <span className="text-muted-fg">To</span>
             <select
               name="payee_id"
-              value={payeeId ?? (initial && initial.from === me?.id ? initial.to : group?.members.find((m) => m.id !== me?.id)?.id) ?? ""}
-              onChange={(e) => setPayeeId(Number(e.target.value))}
+              value={selectedPayeeId ?? ""}
+              onChange={(e) => {
+                setPayeeId(Number(e.target.value));
+                setAmountOverride(null);
+              }}
               className="menu-select h-9 text-sm"
               required
             >
@@ -421,8 +514,46 @@ function SettleUpDialog({
         </div>
         <label className="grid gap-1.5 text-sm">
           Amount ({currency})
-          <Input name="amount" type="number" step="0.01" min="0.01" inputMode="decimal" autoComplete="off" required defaultValue={initial ? (initial.amount / 100).toFixed(2) : undefined} />
+          <Input
+            name="amount"
+            type="number"
+            step="0.01"
+            min="0.01"
+            inputMode="decimal"
+            autoComplete="off"
+            required
+            value={amount}
+            onChange={(e) => setAmountOverride(e.target.value)}
+          />
         </label>
+        {showUpi && payee && (
+          <div className="grid gap-3 rounded-card border border-border bg-card p-4">
+            <p className="text-sm font-medium">Pay via UPI</p>
+            {payeeVpa ? (
+              <>
+                <div className="hidden justify-items-center gap-3 sm:grid">
+                  <QRCodeSVG value={uri} size={200} className="h-auto max-w-full" />
+                  <Button variant="secondary" onClick={() => void copyVpa()}>
+                    {copied ? <CheckIcon size={16} /> : <CopyIcon size={16} />}
+                    {copied ? "Copied" : "Copy UPI ID"}
+                  </Button>
+                </div>
+                <a
+                  href={uri}
+                  className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 font-medium text-primary-fg sm:hidden"
+                >
+                  Pay with UPI app
+                </a>
+              </>
+            ) : (
+              <img
+                src={upiQrUrl(payee.id)}
+                alt={`${payee.name} UPI QR`}
+                className="mx-auto max-h-64 max-w-full rounded-card border border-border object-contain"
+              />
+            )}
+          </div>
+        )}
         {error && (
           <p role="alert" className="text-sm text-destructive">
             {error}
@@ -436,14 +567,184 @@ function SettleUpDialog({
   );
 }
 
+/** Step-through of every debt where you're the payer, recording one payee at a
+ *  time. Uses a snapshot of `debts` (no refetch mid-flow) so the index is stable. */
+function SettleAllDialog({
+  groupId,
+  currency,
+  debts,
+  onClose,
+}: {
+  groupId: string;
+  currency: string;
+  debts: Debt[];
+  onClose: () => void;
+}) {
+  const { data: group } = useGroup(groupId);
+  const { data: me } = useMe();
+  const queryClient = useQueryClient();
+  const myDebts = me ? debts.filter((d) => d.from === me.id) : [];
+  const [index, setIndex] = useState(0);
+  const [amountOverride, setAmountOverride] = useState<string | null>(null);
+  const [recorded, setRecorded] = useState<Set<number>>(new Set());
+  const [error, setError] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  const current = myDebts[index];
+  const payee = group?.members.find((m) => m.id === current?.to);
+  const amount = amountOverride ?? (current ? (current.amount / 100).toFixed(2) : "");
+  const amountMinor = Math.round((parseFloat(amount) || 0) * 100);
+  const payeeVpa = payee?.upi_id && isValidVpa(payee.upi_id) ? payee.upi_id : null;
+  const note = `Splitwise settle up: ${me?.name ?? ""} -> ${payee?.name ?? ""} . ${group?.name ?? ""}`.slice(0, 50);
+  const showUpi = amountMinor > 0 && !!payee && (!!payeeVpa || payee.has_upi_qr);
+  const uri = payeeVpa ? buildUpiUri({ vpa: payeeVpa, payeeName: payee?.name ?? "", amountMinor, note }) : "";
+  const isRecorded = current ? recorded.has(current.to) : false;
+  const isLast = index >= myDebts.length - 1;
+
+  const close = () => {
+    queryClient.invalidateQueries({ queryKey: ["debts", groupId] });
+    onClose();
+  };
+
+  const record = useMutation({
+    mutationFn: () =>
+      createSettlement(groupId, {
+        payer_id: me!.id,
+        payee_id: current!.to,
+        amount_minor: amountMinor,
+        currency,
+      }),
+    onSuccess: () => {
+      setRecorded((s) => new Set(s).add(current!.to));
+      setError("");
+      if (isLast) close();
+      else {
+        setIndex(index + 1);
+        setAmountOverride(null);
+      }
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : "Something went wrong"),
+  });
+
+  function go(delta: number) {
+    setIndex((i) => Math.min(Math.max(i + delta, 0), myDebts.length - 1));
+    setAmountOverride(null);
+    setError("");
+  }
+
+  async function copyVpa() {
+    if (!payeeVpa) return;
+    await navigator.clipboard.writeText(payeeVpa);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <Dialog open onClose={close} title="Settle all">
+      {!current ? (
+        <p className="text-sm text-muted-fg">You don&apos;t owe anyone in this group.</p>
+      ) : (
+        <div key={index} className="settle-step grid gap-4">
+          <div className="flex items-center justify-between text-sm text-muted-fg">
+            <span>
+              Step {index + 1} of {myDebts.length}
+            </span>
+            {isRecorded && <span className="text-success">Recorded</span>}
+          </div>
+
+          <div className="flex items-center gap-2.5">
+            <Avatar name={payee?.name ?? ""} size={28} />
+            <span className="text-sm">
+              Pay <strong>{payee?.name ?? `User ${current.to}`}</strong>
+            </span>
+          </div>
+
+          <label className="grid gap-1.5 text-sm">
+            Amount ({currency})
+            <Input
+              type="number"
+              step="0.01"
+              min="0.01"
+              inputMode="decimal"
+              autoComplete="off"
+              aria-label="Amount"
+              value={amount}
+              onChange={(e) => setAmountOverride(e.target.value)}
+            />
+          </label>
+
+          {showUpi && payee && (
+            <div className="grid gap-3 rounded-card border border-border bg-card p-4">
+              <p className="text-sm font-medium">Pay via UPI</p>
+              {payeeVpa ? (
+                <>
+                  <div className="hidden justify-items-center gap-3 sm:grid">
+                    <QRCodeSVG value={uri} size={200} className="h-auto max-w-full" />
+                    <Button variant="secondary" onClick={() => void copyVpa()}>
+                      {copied ? <CheckIcon size={16} /> : <CopyIcon size={16} />}
+                      {copied ? "Copied" : "Copy UPI ID"}
+                    </Button>
+                  </div>
+                  <a
+                    href={uri}
+                    className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 font-medium text-primary-fg sm:hidden"
+                  >
+                    Pay with UPI app
+                  </a>
+                </>
+              ) : (
+                <img
+                  src={upiQrUrl(payee.id)}
+                  alt={`${payee.name} UPI QR`}
+                  className="mx-auto max-h-64 max-w-full rounded-card border border-border object-contain"
+                />
+              )}
+            </div>
+          )}
+
+          {error && (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          )}
+
+          <div className="flex items-center justify-between gap-2">
+            <Button variant="ghost" disabled={index === 0} onClick={() => go(-1)} aria-label="Previous">
+              ←
+            </Button>
+            <div className="flex gap-2">
+              {isRecorded ? (
+                <Button variant="secondary" onClick={() => (isLast ? close() : go(1))}>
+                  Next
+                </Button>
+              ) : (
+                <Button disabled={record.isPending || !(amountMinor > 0)} onClick={() => record.mutate()}>
+                  {record.isPending ? "Recording…" : isLast ? "Record & finish" : "Record & next"}
+                </Button>
+              )}
+              <Button variant="ghost" disabled={isLast} onClick={() => go(1)} aria-label="Next">
+                →
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </Dialog>
+  );
+}
+
 function BalancesTab({ groupId }: { groupId: string }) {
   const { data: group } = useGroup(groupId);
   const { data: debts, isPending } = useGroupDebts(groupId);
   const [settleOpen, setSettleOpen] = useState(false);
+  const [settleAllOpen, setSettleAllOpen] = useState(false);
 
   return (
     <div>
-      <div className="mb-3 flex justify-end">
+      <div className="mb-3 flex justify-end gap-2">
+        <Button variant="secondary" onClick={() => setSettleAllOpen(true)}>
+          Settle all
+        </Button>
         <Button variant="secondary" onClick={() => setSettleOpen(true)}>
           Settle up
         </Button>
@@ -465,7 +766,7 @@ function BalancesTab({ groupId }: { groupId: string }) {
                 <strong>{memberName(group?.members, d.to)}</strong>
               </span>
               <span className="ml-auto font-medium text-destructive">
-                {formatMinor(d.amount, group?.currency ?? "USD")}
+                {formatMinor(d.amount, group?.currency ?? "INR")}
               </span>
             </li>
           ))}
@@ -474,9 +775,17 @@ function BalancesTab({ groupId }: { groupId: string }) {
       {settleOpen && (
         <SettleUpDialog
           groupId={groupId}
-          currency={group?.currency ?? "USD"}
-          initial={debts?.[0]}
+          currency={group?.currency ?? "INR"}
+          debts={debts ?? []}
           onClose={() => setSettleOpen(false)}
+        />
+      )}
+      {settleAllOpen && (
+        <SettleAllDialog
+          groupId={groupId}
+          currency={group?.currency ?? "INR"}
+          debts={debts ?? []}
+          onClose={() => setSettleAllOpen(false)}
         />
       )}
     </div>
@@ -543,6 +852,7 @@ export default function GroupDetail() {
   const [editing, setEditing] = useState<Expense | null>(null);
   const [copied, setCopied] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [profileMember, setProfileMember] = useState<Member | null>(null);
 
   const del = useMutation({
     mutationFn: () => deleteGroup(id),
@@ -622,8 +932,15 @@ export default function GroupDetail() {
             key={m.id}
             className="flex items-center gap-1.5 rounded-full border border-border bg-card py-1 pl-1 pr-3 text-sm"
           >
-            <Avatar name={m.name} size={24} />
-            {m.name}
+            <button
+              type="button"
+              onClick={() => setProfileMember(m)}
+              aria-label={`View ${m.name} payment details`}
+              className="flex cursor-pointer items-center gap-1.5 rounded-full focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+            >
+              <Avatar name={m.name} size={24} />
+              {m.name}
+            </button>
             {m.role === "admin" && <span className="text-xs text-muted-fg">admin</span>}
             {myMembership?.role === "admin" && m.id !== me?.id && group.members.length > 1 && (
               <button
@@ -672,6 +989,13 @@ export default function GroupDetail() {
         )}
       </div>
 
+      {profileMember && (
+        <MemberProfileDialog
+          member={profileMember}
+          groupName={group.name}
+          onClose={() => setProfileMember(null)}
+        />
+      )}
       <AddMemberDialog groupId={id} open={addOpen} onClose={() => setAddOpen(false)} />
       {expenseOpen && <AddExpense groupId={id} onClose={() => setExpenseOpen(false)} />}
       {editing && <AddExpense groupId={id} expense={editing} onClose={() => setEditing(null)} />}
