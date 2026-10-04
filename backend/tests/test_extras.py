@@ -154,6 +154,24 @@ async def test_receipt_wrong_type_rejected(client):
     assert r.status_code == 422
 
 
+async def test_expense_exposes_receipt_path(client):
+    """The client needs the receipt's type to render PDFs vs images."""
+    group_id, a, b, _ = await _setup_group(client)
+    exp_id = await _add_expense(client, group_id, a, "Lunch", 1000, "2026-08-15")
+
+    r = await client.get(f"/api/groups/{group_id}/expenses")
+    assert r.json()[0]["receipt_path"] is None
+
+    r = await client.post(
+        f"/api/expenses/{exp_id}/receipt",
+        files={"file": ("receipt.pdf", b"%PDF-1.4 fake", "application/pdf")},
+    )
+    assert r.status_code == 200, r.text
+
+    r = await client.get(f"/api/groups/{group_id}/expenses")
+    assert r.json()[0]["receipt_path"].endswith(".pdf")
+
+
 async def test_receipt_too_large_413(client):
     group_id, a, b, _ = await _setup_group(client)
     exp_id = await _add_expense(client, group_id, a, "Lunch", 1000, "2026-08-15")

@@ -236,7 +236,7 @@ function ExpenseDetail({
           </ul>
         </div>
 
-        <Receipt expenseId={expense.id} />
+        <Receipt expenseId={expense.id} receiptPath={expense.receipt_path} />
 
         <div className="grid gap-2 text-sm">
           <h3 className="font-medium">Comments</h3>
@@ -279,20 +279,45 @@ function ExpenseDetail({
   );
 }
 
-/** Receipt image; 404 (no receipt) renders nothing. */
-function Receipt({ expenseId }: { expenseId: number }) {
-  const [error, setError] = useState(false);
-  if (error) return null;
+/** Receipt viewer; images render inline, PDFs embed with an open link (not every
+ *  browser, notably iOS Safari, can embed a PDF). Renders nothing when absent. */
+function Receipt({ expenseId, receiptPath }: { expenseId: number; receiptPath: string | null }) {
+  const [missing, setMissing] = useState(false);
+  if (!receiptPath || missing) return null;
+  // fetch with cookie session via credentials: include
+  const url = `/api/expenses/${expenseId}/receipt`;
+  const isPdf = receiptPath.toLowerCase().endsWith(".pdf");
   return (
     <div className="grid gap-1 text-sm">
       <h3 className="font-medium">Receipt</h3>
-      {/* fetch with cookie session via credentials: include */}
-      <img
-        src={`/api/expenses/${expenseId}/receipt`}
-        alt="Receipt"
-        className="max-h-72 rounded-card border border-border object-contain"
-        onError={() => setError(true)}
-      />
+      {isPdf ? (
+        <>
+          <object
+            data={url}
+            type="application/pdf"
+            className="h-72 w-full rounded-card border border-border"
+          >
+            <p className="rounded-card border border-border p-3 text-muted-fg">
+              Preview unavailable in this browser.
+            </p>
+          </object>
+          <a
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            className="w-fit underline hover:opacity-80"
+          >
+            Open receipt (PDF)
+          </a>
+        </>
+      ) : (
+        <img
+          src={url}
+          alt="Receipt"
+          className="max-h-72 rounded-card border border-border object-contain"
+          onError={() => setMissing(true)}
+        />
+      )}
     </div>
   );
 }

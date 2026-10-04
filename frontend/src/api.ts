@@ -100,6 +100,7 @@ export type Expense = {
   date: string;
   category: string | null;
   recurring_rule_id: number | null;
+  receipt_path: string | null;
   splits: Split[];
 };
 

@@ -114,6 +114,7 @@ async def create_expense(
         category=expense.category,
         splits=[SplitOut(user_id=s.user_id, amount_minor=a) for s, a in zip(payload.splits, amounts)],
         recurring_rule_id=expense.recurring_rule_id,
+        receipt_path=expense.receipt_path,
     )
 
 
@@ -153,6 +154,7 @@ async def list_expenses(
                 category=e.category,
                 splits=[SplitOut(user_id=s.user_id, amount_minor=s.amount_minor) for s in splits],
                 recurring_rule_id=e.recurring_rule_id,
+                receipt_path=e.receipt_path,
             )
         )
     return out
@@ -245,6 +247,7 @@ async def edit_expense(
         category=expense.category,
         splits=[SplitOut(user_id=s.user_id, amount_minor=a) for s, a in zip(payload.splits, amounts)],
         recurring_rule_id=expense.recurring_rule_id,
+        receipt_path=expense.receipt_path,
     )
 
 

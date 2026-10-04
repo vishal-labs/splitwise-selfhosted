@@ -119,6 +119,7 @@ class ExpenseOut(BaseModel):
     category: str | None
     splits: list[SplitOut]
     recurring_rule_id: int | None = None
+    receipt_path: str | None = None
 
 
 class SettlementCreate(BaseModel):
