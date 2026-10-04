@@ -13,7 +13,7 @@ from app.auth import get_current_user, get_db
 from app.config import settings
 from app.models import Membership, Settlement, User
 from app.routers.groups import get_group_member
-from app.schemas import SettlementCreate, SettlementOut
+from app.schemas import SettlementCreate, SettlementOut, settlement_out
 from app.services.money import convert
 from app.services.rates import get_rate
 
@@ -60,17 +60,24 @@ async def create_settlement(
     await log_activity(db, group.id, user.id, "settlement_recorded", target_id=settlement.id)
     await db.commit()
     await db.refresh(settlement)
-    return SettlementOut(
-        id=settlement.id,
-        group_id=settlement.group_id,
-        payer_id=settlement.payer_id,
-        payee_id=settlement.payee_id,
-        amount_minor=settlement.amount_minor,
-        currency=settlement.currency,
-        rate=settlement.rate,
-        date=settlement.date,
-        proof_path=settlement.proof_path,
-    )
+    return settlement_out(settlement)
+
+
+@router.get("/groups/{group_id}/settlements", response_model=list[SettlementOut])
+async def list_settlements(
+    group_id: int,
+    db: AsyncSession = Depends(get_db),
+    pair: tuple = Depends(get_group_member),
+):
+    group, _ = pair
+    rows = (
+        await db.scalars(
+            select(Settlement)
+            .where(Settlement.group_id == group.id)
+            .order_by(Settlement.date.desc(), Settlement.id.desc())
+        )
+    ).all()
+    return [settlement_out(s) for s in rows]
 
 
 async def _get_settlement(

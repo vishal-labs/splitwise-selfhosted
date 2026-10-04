@@ -262,3 +262,11 @@ export const uploadSettlementProof = (settlementId: number, file: File) => {
     form,
   });
 };
+
+export const settlementProofUrl = (id: number) => `/api/settlements/${id}/proof`;
+
+export const getGroupSettlements = (id: number | string) =>
+  api<Settlement[]>(`/groups/${id}/settlements`);
+
+export const useGroupSettlements = (id: number | string) =>
+  useQuery({ queryKey: ["settlements", id], queryFn: () => getGroupSettlements(id) });

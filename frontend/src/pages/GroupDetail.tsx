@@ -10,19 +10,23 @@ import {
   deleteGroup,
   getComments,
   removeMember,
+  settlementProofUrl,
   uploadSettlementProof,
   upiQrUrl,
   useGroup,
   useGroupDebts,
   useGroupExpenses,
+  useGroupSettlements,
   type Comment,
   type Debt,
   type Expense,
   type Member,
+  type Settlement,
 } from "../api";
 import { buildUpiUri, isValidVpa } from "../upi";
 import UpiQr from "../components/UpiQr";
 import { useMe } from "../App";
+import { Attachment } from "../components/Attachment";
 import { Avatar } from "../components/Avatar";
 import { CheckIcon, CopyIcon, PencilIcon, PlusIcon, RepeatIcon, TrashIcon, XIcon, PaperclipIcon } from "../components/icons";
 import { Button } from "../components/Button";
@@ -279,45 +283,19 @@ function ExpenseDetail({
   );
 }
 
-/** Receipt viewer; images render inline, PDFs embed with an open link (not every
- *  browser, notably iOS Safari, can embed a PDF). Renders nothing when absent. */
+/** Receipt viewer; renders nothing when the expense has no receipt. */
 function Receipt({ expenseId, receiptPath }: { expenseId: number; receiptPath: string | null }) {
-  const [missing, setMissing] = useState(false);
-  if (!receiptPath || missing) return null;
+  if (!receiptPath) return null;
   // fetch with cookie session via credentials: include
-  const url = `/api/expenses/${expenseId}/receipt`;
-  const isPdf = receiptPath.toLowerCase().endsWith(".pdf");
   return (
     <div className="grid gap-1 text-sm">
       <h3 className="font-medium">Receipt</h3>
-      {isPdf ? (
-        <>
-          <object
-            data={url}
-            type="application/pdf"
-            className="h-72 w-full rounded-card border border-border"
-          >
-            <p className="rounded-card border border-border p-3 text-muted-fg">
-              Preview unavailable in this browser.
-            </p>
-          </object>
-          <a
-            href={url}
-            target="_blank"
-            rel="noreferrer"
-            className="w-fit underline hover:opacity-80"
-          >
-            Open receipt (PDF)
-          </a>
-        </>
-      ) : (
-        <img
-          src={url}
-          alt="Receipt"
-          className="max-h-72 rounded-card border border-border object-contain"
-          onError={() => setMissing(true)}
-        />
-      )}
+      <Attachment
+        url={`/api/expenses/${expenseId}/receipt`}
+        path={receiptPath}
+        alt="Receipt"
+        linkLabel="Open receipt (PDF)"
+      />
     </div>
   );
 }
@@ -479,6 +457,7 @@ function SettleUpDialog({
     },
     onSuccess: ({ settlement, proofFailed }) => {
       queryClient.invalidateQueries({ queryKey: ["debts", groupId] });
+      queryClient.invalidateQueries({ queryKey: ["settlements", groupId] });
       if (proofFailed) {
         // keep the dialog open: settlement is done, let them retry the proof
         setError(`Payment recorded — proof upload failed. Retry below (settlement #${settlement.id}).`);
@@ -495,6 +474,7 @@ function SettleUpDialog({
     mutationFn: () => uploadSettlementProof(pendingProof!, proof!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["debts", groupId] });
+      queryClient.invalidateQueries({ queryKey: ["settlements", groupId] });
       onClose();
     },
     onError: (e) =>
@@ -689,6 +669,7 @@ function SettleAllDialog({
 
   const close = () => {
     queryClient.invalidateQueries({ queryKey: ["debts", groupId] });
+    queryClient.invalidateQueries({ queryKey: ["settlements", groupId] });
     onClose();
   };
 
@@ -705,6 +686,7 @@ function SettleAllDialog({
       setError("");
       // Keep balances live during the flow; the snapshot above is unaffected.
       queryClient.invalidateQueries({ queryKey: ["debts", groupId] });
+      queryClient.invalidateQueries({ queryKey: ["settlements", groupId] });
       if (isLast) close();
       else {
         setIndex(index + 1);
@@ -884,6 +866,85 @@ function BalancesTab({ groupId }: { groupId: string }) {
         />
       )}
     </div>
+  );
+}
+
+function SettlementRow({
+  settlement,
+  members,
+  currency,
+}: {
+  settlement: Settlement;
+  members: Member[] | undefined;
+  currency: string;
+}) {
+  const [proofOpen, setProofOpen] = useState(false);
+  return (
+    <li className="flex items-center gap-2.5 rounded-card border border-border bg-card px-4 py-3 text-sm">
+      <Avatar name={memberName(members, settlement.payer_id)} size={28} />
+      <span className="min-w-0">
+        <span className="block truncate">
+          <strong>{memberName(members, settlement.payer_id)}</strong> paid{" "}
+          <strong>{memberName(members, settlement.payee_id)}</strong>
+        </span>
+        <span className="text-xs text-muted-fg">{settlement.date}</span>
+      </span>
+      <span className="ml-auto flex shrink-0 items-center gap-1">
+        <span className="font-medium tabular-nums">
+          {formatMinor(settlement.amount_minor, currency)}
+        </span>
+        {settlement.proof_path && (
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="View payment proof"
+            className="h-8 text-muted-fg"
+            onClick={() => setProofOpen(true)}
+          >
+            <PaperclipIcon size={15} />
+          </Button>
+        )}
+      </span>
+      {proofOpen && (
+        <Dialog open onClose={() => setProofOpen(false)} title="Payment proof">
+          <Attachment
+            url={settlementProofUrl(settlement.id)}
+            path={settlement.proof_path}
+            alt="Payment proof"
+            linkLabel="Open proof (PDF)"
+          />
+        </Dialog>
+      )}
+    </li>
+  );
+}
+
+function SettlementsTab({ groupId }: { groupId: string }) {
+  const { data: group } = useGroup(groupId);
+  const { data: settlements, isPending, isError, refetch } = useGroupSettlements(groupId);
+
+  if (isPending) return <p className="text-muted-fg">Loading…</p>;
+  if (isError)
+    return <ErrorState description="Couldn't load settlements." action={() => void refetch()} />;
+  if (!settlements || settlements.length === 0)
+    return (
+      <EmptyState
+        title="No settlements yet"
+        description="Payments recorded from the Balances tab show up here."
+      />
+    );
+
+  return (
+    <ul className="grid gap-2">
+      {settlements.map((s) => (
+        <SettlementRow
+          key={s.id}
+          settlement={s}
+          members={group?.members}
+          currency={group?.currency ?? "INR"}
+        />
+      ))}
+    </ul>
   );
 }
 
@@ -1071,6 +1132,7 @@ export default function GroupDetail() {
           tabs={[
             { id: "expenses", label: "Expenses" },
             { id: "balances", label: "Balances" },
+            { id: "settlements", label: "Settlements" },
           ]}
           value={tab}
           onChange={setTab}
@@ -1085,8 +1147,10 @@ export default function GroupDetail() {
             myRole={myMembership?.role ?? "member"}
             onEdit={setEditing}
           />
-        ) : (
+        ) : tab === "balances" ? (
           <BalancesTab groupId={id} />
+        ) : (
+          <SettlementsTab groupId={id} />
         )}
       </div>
 

@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
-from app.models import User
+from app.models import Settlement, User
 
 
 class UserCreate(BaseModel):
@@ -139,6 +139,20 @@ class SettlementOut(BaseModel):
     rate: float | None
     date: Date
     proof_path: str | None = None
+
+
+def settlement_out(settlement: Settlement) -> SettlementOut:
+    return SettlementOut(
+        id=settlement.id,
+        group_id=settlement.group_id,
+        payer_id=settlement.payer_id,
+        payee_id=settlement.payee_id,
+        amount_minor=settlement.amount_minor,
+        currency=settlement.currency,
+        rate=settlement.rate,
+        date=settlement.date,
+        proof_path=settlement.proof_path,
+    )
 
 
 class DebtOut(BaseModel):

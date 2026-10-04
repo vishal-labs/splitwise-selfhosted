@@ -236,3 +236,55 @@ async def test_proof_replace_unlinks_old_file(client):
     assert second != first
     assert len(os.listdir(upload_dir)) == 1  # old file unlinked, new one remains
     assert os.listdir(upload_dir) == [second]
+
+
+# --- settlement history (list) ---
+
+
+async def test_list_settlements_newest_first(client):
+    group_id, a, b, _ = await _setup_group(client)
+    first = await _create_settlement(client, group_id, b, a)
+    second = await _create_settlement(client, group_id, a, b)
+
+    r = await client.get(f"/api/groups/{group_id}/settlements")
+    assert r.status_code == 200, r.text
+    rows = r.json()
+    assert [s["id"] for s in rows] == [second, first]
+    assert rows[0]["payer_id"] == a
+    assert rows[0]["payee_id"] == b
+    assert rows[0]["amount_minor"] == 500
+    assert rows[0]["currency"] == "USD"
+    assert rows[0]["proof_path"] is None
+
+
+async def test_list_settlements_empty(client):
+    group_id, a, b, _ = await _setup_group(client)
+    r = await client.get(f"/api/groups/{group_id}/settlements")
+    assert r.status_code == 200
+    assert r.json() == []
+
+
+async def test_list_settlements_includes_proof_path(client):
+    group_id, a, b, _ = await _setup_group(client)
+    sid = await _create_settlement(client, group_id, b, a)
+
+    r = await client.get(f"/api/groups/{group_id}/settlements")
+    assert r.json()[0]["proof_path"] is None
+
+    r = await client.post(
+        f"/api/settlements/{sid}/proof",
+        files={"file": ("proof.png", b"x", "image/png")},
+    )
+    assert r.status_code == 200, r.text
+
+    r = await client.get(f"/api/groups/{group_id}/settlements")
+    assert r.json()[0]["proof_path"].endswith(".png")
+
+
+async def test_list_settlements_non_member_404(client):
+    group_id, a, b, _ = await _setup_group(client)
+    await _create_settlement(client, group_id, b, a)
+    token_c = await _register(client, "c@b.com")
+    await _switch(client, token_c)
+    r = await client.get(f"/api/groups/{group_id}/settlements")
+    assert r.status_code == 404
