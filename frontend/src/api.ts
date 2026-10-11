@@ -276,7 +276,19 @@ export type Settlement = {
   rate: number | null;
   date: string;
   proof_path: string | null;
+  /** Waiting for the payee to confirm; deletable until then. */
+  pending: boolean;
+  created_by: number | null;
+  confirmed_at: string | null;
 };
+
+/** A payment someone recorded to you that you haven't confirmed yet. */
+export type PendingSettlement = Settlement & { group_name: string; group_currency: string; payer_name: string };
+
+export const confirmSettlement = (id: number) => api<Settlement>(`/settlements/${id}/confirm`, { method: "POST" });
+export const deleteSettlement = (id: number) => api<{ ok: boolean }>(`/settlements/${id}`, { method: "DELETE" });
+export const usePendingSettlements = () =>
+  useQuery({ queryKey: ["settlements", "pending"], queryFn: () => api<PendingSettlement[]>("/settlements/pending") });
 
 export const uploadSettlementProof = (settlementId: number, file: File) => {
   const form = new FormData();
@@ -320,4 +332,5 @@ export function invalidateGroup(queryClient: QueryClient, groupId: number | stri
   queryClient.invalidateQueries({ queryKey: ["friends"] });
   queryClient.invalidateQueries({ queryKey: ["activity"] });
   queryClient.invalidateQueries({ queryKey: ["groups"] });
+  queryClient.invalidateQueries({ queryKey: ["settlements", "pending"] });
 }

@@ -62,7 +62,7 @@ async def _group_rows(db: AsyncSession, group_id: int) -> tuple[list, list]:
     settle_rows = (
         await db.execute(
             select(Settlement.payer_id, Settlement.payee_id, Settlement.amount_minor)
-            .where(Settlement.group_id == group_id)
+            .where(Settlement.group_id == group_id, Settlement.deleted_at.is_(None))
         )
     ).all()
     return exp_rows, [tuple(r) for r in settle_rows]

@@ -6,6 +6,7 @@ import { useMe } from "../App";
 import { groupNets, overallTotals } from "../balance";
 import { GroupAvatar } from "../components/Avatar";
 import { BalanceHero } from "../components/BalanceHero";
+import { ConfirmInbox } from "../components/ConfirmInbox";
 import { Button } from "../components/Button";
 import { Dialog } from "../components/Dialog";
 import { EmptyState } from "../components/EmptyState";
@@ -153,6 +154,7 @@ export default function Dashboard() {
         </div>
 
         <section aria-label="Groups" className="lg:order-1">
+          <ConfirmInbox />
           <div className="mb-2 flex items-center justify-between px-1">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-fg">Your groups</h2>
             <button

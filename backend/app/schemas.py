@@ -162,6 +162,9 @@ class SettlementOut(BaseModel):
     rate: float | None
     date: Date
     proof_path: str | None = None
+    pending: bool = False
+    created_by: int | None = None
+    confirmed_at: datetime | None = None
 
 
 def settlement_out(settlement: Settlement) -> SettlementOut:
@@ -175,6 +178,9 @@ def settlement_out(settlement: Settlement) -> SettlementOut:
         rate=settlement.rate,
         date=settlement.date,
         proof_path=settlement.proof_path,
+        pending=settlement.pending is True,
+        created_by=settlement.created_by,
+        confirmed_at=settlement.confirmed_at,
     )
 
 

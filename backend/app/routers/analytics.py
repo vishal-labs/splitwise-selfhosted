@@ -115,6 +115,7 @@ async def export_csv(
     )
 
 
+SETTLEMENT_VERBS = {"settlement_recorded", "settlement_confirmed", "settlement_deleted"}
 # verbs whose target_id is an expense ("commented" targets the expense commented on)
 EXPENSE_VERBS = {"expense_added", "expense_updated", "expense_deleted", "expense_restored", "commented"}
 
@@ -122,7 +123,7 @@ EXPENSE_VERBS = {"expense_added", "expense_updated", "expense_deleted", "expense
 async def _activity_out(db: AsyncSession, rows: list[Activity]) -> list[dict]:
     """Activity rows with actor + group names and, for expenses/settlements, what it was."""
     expense_ids = {a.target_id for a in rows if a.verb in EXPENSE_VERBS and a.target_id}
-    settlement_ids = {a.target_id for a in rows if a.verb == "settlement_recorded" and a.target_id}
+    settlement_ids = {a.target_id for a in rows if a.verb in SETTLEMENT_VERBS and a.target_id}
     expenses = {
         e.id: e
         for e in (await db.scalars(select(Expense).where(Expense.id.in_(expense_ids)))).all()
@@ -153,7 +154,7 @@ async def _activity_out(db: AsyncSession, rows: list[Activity]) -> list[dict]:
     def detail(a: Activity) -> dict | None:
         if a.verb in EXPENSE_VERBS and (e := expenses.get(a.target_id)):
             return {"description": e.description, "amount": e.amount_minor, "currency": e.currency}
-        if a.verb == "settlement_recorded" and (s := settlements.get(a.target_id)):
+        if a.verb in SETTLEMENT_VERBS and (s := settlements.get(a.target_id)):
             return {
                 "description": f"{names.get(s.payer_id, '')} paid {names.get(s.payee_id, '')}",
                 # settlement amounts are stored converted to the group currency

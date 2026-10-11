@@ -85,6 +85,13 @@ class Settlement(Base):
     rate: Mapped[float | None] = mapped_column()
     date: Mapped[date] = mapped_column(Date)
     proof_path: Mapped[str | None] = mapped_column(String(255))
+    # Receiver confirmation. True = waiting for the payee to confirm (still
+    # deletable); False/None = confirmed and locked. None = recorded before
+    # confirmations existed, treated as confirmed.
+    pending: Mapped[bool | None] = mapped_column()
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime)
 
 
 class Comment(Base):

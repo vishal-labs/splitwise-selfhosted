@@ -4,7 +4,7 @@ import { useMe } from "../App";
 import { Avatar } from "../components/Avatar";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorState } from "../components/ErrorState";
-import { ActivityIcon, MessageIcon, PencilIcon, PlusIcon, SettleIcon, TrashIcon, UndoIcon, UserPlusIcon, UsersIcon, type Icon } from "../components/icons";
+import { ActivityIcon, CheckIcon, MessageIcon, PencilIcon, PlusIcon, SettleIcon, TrashIcon, UndoIcon, UserPlusIcon, UsersIcon, type Icon } from "../components/icons";
 import { PageHeader } from "../components/PageHeader";
 import { ListSkeleton } from "../components/Skeleton";
 import { dayLabel, formatMinor, isoDay, relativeTime } from "../format";
@@ -20,6 +20,8 @@ const VERBS: Record<string, [string, Icon, string]> = {
   expense_deleted: ["deleted", TrashIcon, "var(--destructive)"],
   expense_restored: ["restored", UndoIcon, "var(--avatar-7)"],
   settlement_recorded: ["recorded a payment", SettleIcon, "var(--positive)"],
+  settlement_confirmed: ["confirmed a payment", CheckIcon, "var(--positive)"],
+  settlement_deleted: ["deleted a payment", TrashIcon, "var(--destructive)"],
   recurring_cancelled: ["stopped a recurring expense", ActivityIcon, "var(--muted-fg)"],
   group_updated: ["updated group settings", PencilIcon, "var(--muted-fg)"],
   commented: ["commented on", MessageIcon, "var(--avatar-3)"],
@@ -60,8 +62,8 @@ function Row({ item, meId }: { item: ActivityItem; meId: number }) {
           </span>
           <span className="mt-0.5 flex items-center gap-2 text-sm text-muted-fg">
             {d && item.verb !== "commented" && (
-              <span className={`tabular font-medium ${item.verb === "settlement_recorded" ? "text-positive" : "text-fg/80"}`}>
-                {item.verb === "settlement_recorded" ? `${d.description} · ` : ""}
+              <span className={`tabular font-medium ${item.verb.startsWith("settlement_") ? (item.verb === "settlement_deleted" ? "line-through text-muted-fg" : "text-positive") : "text-fg/80"}`}>
+                {item.verb.startsWith("settlement_") ? `${d.description} · ` : ""}
                 {formatMinor(d.amount, d.currency)}
               </span>
             )}

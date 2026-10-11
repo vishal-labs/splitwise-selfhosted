@@ -2,7 +2,8 @@ import { useDeferredValue, useState } from "react";
 import type { Expense, Member, Settlement } from "../../api";
 import { CategoryTile } from "../../components/CategoryTile";
 import { EmptyState } from "../../components/EmptyState";
-import { PaperclipIcon, ReceiptIcon, RepeatIcon, SearchIcon, SettleIcon, XIcon } from "../../components/icons";
+import { PaperclipIcon, ReceiptIcon, RepeatIcon, SearchIcon, XIcon } from "../../components/icons";
+import { PaymentTile } from "../../components/PaymentTile";
 import { dateBadge, firstName, formatMinor, monthHeading } from "../../format";
 
 type Item = { kind: "expense"; date: string; id: number; expense: Expense } | { kind: "payment"; date: string; id: number; settlement: Settlement };
@@ -85,18 +86,22 @@ function PaymentRow({ settlement, members, meId, currency, onOpen }: { settlemen
         className="pressable flex w-full cursor-pointer items-center gap-3 rounded-2xl px-2 py-2.5 text-left transition-colors hover:bg-muted"
       >
         <DateBadge date={settlement.date} />
-        <span className="inline-flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-[13px] bg-positive-soft text-positive">
-          <SettleIcon size={20} />
-        </span>
+        <PaymentTile pending={settlement.pending} />
         <span className="min-w-0 flex-1">
           <span className="block truncate font-medium">
             {payer} paid {payee === "You" ? "you" : payee}
           </span>
-          <span className="flex items-center gap-1 text-sm text-muted-fg">
-            Payment {settlement.proof_path && <><PaperclipIcon size={12} /> proof</>}
-          </span>
+          {settlement.pending ? (
+            <span className="block truncate text-sm font-medium text-primary-soft-fg">
+              {settlement.payee_id === meId ? "Confirm you received it" : `Waiting for ${payee === "You" ? "you" : firstName(payee)} to confirm`}
+            </span>
+          ) : (
+            <span className="flex items-center gap-1 text-sm text-muted-fg">
+              Payment {settlement.proof_path && <><PaperclipIcon size={12} /> proof</>}
+            </span>
+          )}
         </span>
-        <span className={`tabular shrink-0 font-semibold ${mine ? "text-positive" : "text-muted-fg"}`}>
+        <span className={`tabular shrink-0 font-semibold ${settlement.pending ? "text-muted-fg" : mine ? "text-positive" : "text-muted-fg"}`}>
           {formatMinor(settlement.amount_minor, currency)}
         </span>
       </button>
