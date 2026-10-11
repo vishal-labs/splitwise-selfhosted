@@ -6,8 +6,8 @@ from fastapi import APIRouter, Depends, Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_db
-from app.models import Activity, Expense, User
+from app.auth import get_current_user, get_db
+from app.models import Activity, Expense, ExpenseSplit, Group, Membership, Settlement, User
 from app.routers.groups import get_group_member
 
 router = APIRouter(prefix="/api", tags=["analytics"])
@@ -33,14 +33,19 @@ async def group_analytics(
     db: AsyncSession = Depends(get_db),
     pair: tuple = Depends(get_group_member),
 ):
-    group, _ = pair
+    group, me = pair
     window = _cutoff(max(1, months))
     total = func.coalesce(Expense.converted_amount_minor, Expense.amount_minor)
+    in_window = (
+        Expense.group_id == group.id,
+        Expense.date >= window,
+        Expense.deleted_at.is_(None),
+    )
 
     monthly = (
         await db.execute(
             select(func.strftime("%Y-%m", Expense.date), func.sum(total))
-            .where(Expense.group_id == group.id, Expense.date >= window)
+            .where(*in_window)
             .group_by(func.strftime("%Y-%m", Expense.date))
             .order_by(func.strftime("%Y-%m", Expense.date))
         )
@@ -48,14 +53,27 @@ async def group_analytics(
     by_category = (
         await db.execute(
             select(Expense.category, func.sum(total))
-            .where(Expense.group_id == group.id, Expense.date >= window)
+            .where(*in_window)
             .group_by(Expense.category)
             .order_by(func.sum(total).desc())
         )
     ).all()
+    you_paid = await db.scalar(
+        select(func.coalesce(func.sum(total), 0)).where(*in_window, Expense.payer_id == me.user_id)
+    )
+    your_share = await db.scalar(
+        select(func.coalesce(func.sum(ExpenseSplit.amount_minor), 0))
+        .join(Expense, Expense.id == ExpenseSplit.expense_id)
+        .where(*in_window, ExpenseSplit.user_id == me.user_id)
+    )
     return {
         "monthly": [{"month": m, "total": t} for m, t in monthly],
         "by_category": [{"category": c or "Other", "total": t} for c, t in by_category],
+        "summary": {
+            "total": sum(t for _, t in monthly),
+            "you_paid": you_paid,
+            "your_share": your_share,
+        },
     }
 
 
@@ -69,7 +87,7 @@ async def export_csv(
         await db.execute(
             select(Expense, User.name)
             .join(User, User.id == Expense.payer_id)
-            .where(Expense.group_id == group.id)
+            .where(Expense.group_id == group.id, Expense.deleted_at.is_(None))
             .order_by(Expense.date, Expense.id)
         )
     ).all()
@@ -97,6 +115,69 @@ async def export_csv(
     )
 
 
+# verbs whose target_id is an expense ("commented" targets the expense commented on)
+EXPENSE_VERBS = {"expense_added", "expense_updated", "expense_deleted", "expense_restored", "commented"}
+
+
+async def _activity_out(db: AsyncSession, rows: list[Activity]) -> list[dict]:
+    """Activity rows with actor + group names and, for expenses/settlements, what it was."""
+    expense_ids = {a.target_id for a in rows if a.verb in EXPENSE_VERBS and a.target_id}
+    settlement_ids = {a.target_id for a in rows if a.verb == "settlement_recorded" and a.target_id}
+    expenses = {
+        e.id: e
+        for e in (await db.scalars(select(Expense).where(Expense.id.in_(expense_ids)))).all()
+    }
+    settlements = {
+        s.id: s
+        for s in (
+            await db.scalars(select(Settlement).where(Settlement.id.in_(settlement_ids)))
+        ).all()
+    }
+    user_ids = {a.user_id for a in rows} | {
+        uid for s in settlements.values() for uid in (s.payer_id, s.payee_id)
+    }
+    names = dict(
+        (await db.execute(select(User.id, User.name).where(User.id.in_(user_ids)))).all()
+    )
+    groups = {
+        gid: (name, currency)
+        for gid, name, currency in (
+            await db.execute(
+                select(Group.id, Group.name, Group.currency).where(
+                    Group.id.in_({a.group_id for a in rows})
+                )
+            )
+        ).all()
+    }
+
+    def detail(a: Activity) -> dict | None:
+        if a.verb in EXPENSE_VERBS and (e := expenses.get(a.target_id)):
+            return {"description": e.description, "amount": e.amount_minor, "currency": e.currency}
+        if a.verb == "settlement_recorded" and (s := settlements.get(a.target_id)):
+            return {
+                "description": f"{names.get(s.payer_id, '')} paid {names.get(s.payee_id, '')}",
+                # settlement amounts are stored converted to the group currency
+                "amount": s.amount_minor,
+                "currency": groups[s.group_id][1],
+            }
+        return None
+
+    return [
+        {
+            "id": a.id,
+            "user_id": a.user_id,
+            "user_name": names.get(a.user_id, ""),
+            "group_id": a.group_id,
+            "group_name": groups[a.group_id][0] if a.group_id in groups else "",
+            "verb": a.verb,
+            "target_id": a.target_id,
+            "detail": detail(a),
+            "created_at": a.created_at.isoformat() if a.created_at else None,
+        }
+        for a in rows
+    ]
+
+
 @router.get("/groups/{group_id}/activity")
 async def group_activity(
     group_id: int,
@@ -111,18 +192,26 @@ async def group_activity(
             .limit(100)
         )
     ).all()
-    users = {
-        u.id: u.name
-        for u in (await db.scalars(select(User))).all()
-    }
-    return [
-        {
-            "id": a.id,
-            "user_id": a.user_id,
-            "user_name": users.get(a.user_id, ""),
-            "verb": a.verb,
-            "target_id": a.target_id,
-            "created_at": a.created_at.isoformat() if a.created_at else None,
-        }
-        for a in rows
-    ]
+    return await _activity_out(db, rows)
+
+
+@router.get("/activity")
+async def my_activity(
+    limit: int = 100,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Activity across every group the user belongs to, newest first."""
+    rows = (
+        await db.scalars(
+            select(Activity)
+            .where(
+                Activity.group_id.in_(
+                    select(Membership.group_id).where(Membership.user_id == user.id)
+                )
+            )
+            .order_by(Activity.created_at.desc(), Activity.id.desc())
+            .limit(min(max(limit, 1), 200))
+        )
+    ).all()
+    return await _activity_out(db, rows)

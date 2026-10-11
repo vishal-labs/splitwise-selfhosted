@@ -1,3 +1,5 @@
+import datetime as dt
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,7 +41,8 @@ async def create_comment(
     db.add(row)
     await log_activity(db, expense.group_id, user.id, "commented", target_id=expense.id)
     await db.commit()
-    return CommentOut(id=row.id, user_id=row.user_id, body=row.body, created_at=row.created_at)
+    await db.refresh(row)
+    return CommentOut.model_validate(row)
 
 
 @router.get("/expenses/{expense_id}/comments", response_model=list[CommentOut])
@@ -52,10 +55,32 @@ async def list_comments(
             select(Comment).where(Comment.expense_id == expense.id).order_by(Comment.id)
         )
     ).all()
-    return [
-        CommentOut(id=c.id, user_id=c.user_id, body=c.body, created_at=c.created_at)
-        for c in rows
-    ]
+    return [CommentOut.model_validate(c) for c in rows]
+
+
+async def _own_comment(comment_id: int, expense: Expense, user: User, db: AsyncSession) -> Comment:
+    """The comment, if it's on `expense` (else 404) and written by `user` (else 403)."""
+    comment = await db.get(Comment, comment_id)
+    if comment is None or comment.expense_id != expense.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND)
+    if comment.user_id != user.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only your own comments")
+    return comment
+
+
+@router.patch("/expenses/{expense_id}/comments/{comment_id}", response_model=CommentOut)
+async def edit_comment(
+    comment_id: int,
+    payload: CommentCreate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    expense: Expense = Depends(get_expense_member),
+):
+    comment = await _own_comment(comment_id, expense, user, db)
+    comment.body = payload.body
+    comment.updated_at = dt.datetime.now(dt.UTC).replace(tzinfo=None)
+    await db.commit()
+    return CommentOut.model_validate(comment)
 
 
 @router.delete("/expenses/{expense_id}/comments/{comment_id}")
@@ -65,11 +90,7 @@ async def delete_comment(
     db: AsyncSession = Depends(get_db),
     expense: Expense = Depends(get_expense_member),
 ):
-    comment = await db.get(Comment, comment_id)
-    if comment is None or comment.expense_id != expense.id:
-        raise HTTPException(status.HTTP_404_NOT_FOUND)
-    if comment.user_id != user.id:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only your own comments")
+    comment = await _own_comment(comment_id, expense, user, db)
     await db.delete(comment)
     await db.commit()
     return {"ok": True}

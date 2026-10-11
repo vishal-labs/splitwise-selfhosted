@@ -17,7 +17,16 @@ from app.models import (
     Settlement,
     User,
 )
-from app.schemas import GroupCreate, GroupDetail, GroupOut, MemberAdd, MemberOut
+from app.schemas import (
+    PENDING_HASH,
+    GroupCreate,
+    GroupDetail,
+    GroupOut,
+    GroupUpdate,
+    MemberAdd,
+    MemberOut,
+    is_pending,
+)
 from app.services.balances import group_net_balances
 
 router = APIRouter(prefix="/api/groups", tags=["groups"])
@@ -65,6 +74,7 @@ async def create_group(
         created_by=group.created_by,
         invite_code=group.invite_code,
         member_count=1,
+        simplify_debts=group.simplify_debts is not False,
     )
 
 
@@ -96,6 +106,7 @@ async def join_by_invite(
         created_by=group.created_by,
         invite_code=group.invite_code,
         member_count=count or 1,
+        simplify_debts=group.simplify_debts is not False,
     )
 
 
@@ -126,6 +137,7 @@ async def list_groups(
             created_by=g.created_by,
             invite_code=g.invite_code,
             member_count=counts.get(g.id, 0),
+            simplify_debts=g.simplify_debts is not False,
         )
         for g in groups
     ]
@@ -151,6 +163,7 @@ async def get_group(
         created_by=group.created_by,
         invite_code=group.invite_code,
         member_count=len(rows),
+        simplify_debts=group.simplify_debts is not False,
         members=[
             MemberOut(
                 id=u.id,
@@ -159,6 +172,7 @@ async def get_group(
                 role=role,
                 upi_id=u.upi_id,
                 has_upi_qr=bool(u.upi_qr_path),
+                pending=is_pending(u),
             )
             for u, role in rows
         ],
@@ -175,7 +189,12 @@ async def add_member(
     group, _ = pair
     target = await db.scalar(select(User).where(User.email == payload.email))
     if target is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "No user with that email")
+        if payload.name is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "No user with that email")
+        # invite: a pending account they claim by registering with this email
+        target = User(email=payload.email, name=payload.name.strip(), password_hash=PENDING_HASH)
+        db.add(target)
+        await db.flush()
     existing = await db.scalar(
         select(Membership).where(
             Membership.group_id == group.id, Membership.user_id == target.id
@@ -186,7 +205,42 @@ async def add_member(
     db.add(Membership(group_id=group.id, user_id=target.id))
     await log_activity(db, group.id, target.id, "joined", target_id=target.id)
     await db.commit()
-    return {"id": target.id, "email": target.email, "name": target.name}
+    return {
+        "id": target.id,
+        "email": target.email,
+        "name": target.name,
+        "pending": is_pending(target),
+    }
+
+
+@router.patch("/{group_id}", response_model=GroupOut)
+async def update_group(
+    payload: GroupUpdate,
+    pair: tuple[Group, Membership] = Depends(get_group_member),
+    db: AsyncSession = Depends(get_db),
+):
+    group, me = pair
+    if me.role != "admin":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only admins can change group settings")
+    data = payload.model_dump(exclude_unset=True)
+    if data.get("name") is not None:
+        group.name = data["name"].strip()
+    if data.get("simplify_debts") is not None:
+        group.simplify_debts = data["simplify_debts"]
+    await log_activity(db, group.id, me.user_id, "group_updated", target_id=group.id)
+    await db.commit()
+    count = await db.scalar(
+        select(func.count()).select_from(Membership).where(Membership.group_id == group.id)
+    )
+    return GroupOut(
+        id=group.id,
+        name=group.name,
+        currency=group.currency,
+        created_by=group.created_by,
+        invite_code=group.invite_code,
+        member_count=count or 0,
+        simplify_debts=group.simplify_debts is not False,
+    )
 
 
 @router.delete("/{group_id}/members/{user_id}")

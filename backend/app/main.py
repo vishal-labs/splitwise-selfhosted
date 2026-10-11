@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.db import SessionLocal, init
-from app.routers import analytics, comments, expenses, groups, settlements, uploads, users
+from app.routers import analytics, comments, expenses, friends, groups, settlements, uploads, users
 from app.services.recurring import materialize_due
 
 log = logging.getLogger(__name__)
@@ -55,6 +55,7 @@ def create_app() -> FastAPI:
     app.include_router(analytics.router)
     app.include_router(comments.router)
     app.include_router(uploads.router)
+    app.include_router(friends.router)
 
     @app.get("/api/health")
     async def health():

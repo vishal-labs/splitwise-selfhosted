@@ -52,3 +52,51 @@ def test_zero_balance_excluded():
     debts = simplify_debts({1: 0, 2: -300, 3: 300})
     users = {u for f, t, _ in debts for u in (f, t)}
     assert 1 not in users
+
+
+def test_pairwise_debts_keep_direct_relationships():
+    from app.services.balances import pairwise_debts
+
+    # 1 paid 1000 for 2; 2 paid 1000 for 3 → no rerouting, two direct debts
+    expenses = [(1, 1000, [(2, 1000)]), (2, 1000, [(3, 1000)])]
+    assert sorted(pairwise_debts(expenses, [])) == [(2, 1, 1000), (3, 2, 1000)]
+
+
+def test_pairwise_debts_net_each_pair_and_apply_settlements():
+    from app.services.balances import pairwise_debts
+
+    expenses = [
+        (1, 1000, [(1, 500), (2, 500)]),  # 2 owes 1: 500
+        (2, 400, [(1, 400)]),  # 1 owes 2: 400 → net 2 owes 1: 100
+    ]
+    assert pairwise_debts(expenses, []) == [(2, 1, 100)]
+    # 2 pays 1 150 → overshoots by 50 → 1 owes 2: 50
+    assert pairwise_debts(expenses, [(2, 1, 150)]) == [(1, 2, 50)]
+    assert pairwise_debts(expenses, [(2, 1, 100)]) == []
+
+
+def test_pairwise_and_simplified_agree_on_net_balances():
+    import random
+
+    from app.services.balances import pairwise_debts
+
+    rng = random.Random(7)
+    for _ in range(200):
+        users = list(range(1, rng.randint(3, 7)))  # 2..6 people
+        expenses = []
+        for _ in range(rng.randint(1, 8)):
+            payer = rng.choice(users)
+            members = rng.sample(users, rng.randint(1, len(users)))
+            splits = [(u, rng.randint(1, 5000)) for u in members]
+            expenses.append((payer, sum(a for _, a in splits), splits))
+        settlements = [
+            (a, b, rng.randint(1, 3000))
+            for a, b in (rng.sample(users, 2) for _ in range(rng.randint(0, 3)))
+        ]
+        nets = net_balances(expenses, settlements)
+        from_pairs: dict[int, int] = {}
+        for f, t, amt in pairwise_debts(expenses, settlements):
+            assert amt > 0 and f != t
+            from_pairs[f] = from_pairs.get(f, 0) - amt
+            from_pairs[t] = from_pairs.get(t, 0) + amt
+        assert {u: b for u, b in from_pairs.items() if b} == {u: b for u, b in nets.items() if b}

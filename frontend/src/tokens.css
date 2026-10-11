@@ -1,62 +1,58 @@
-/* Design tokens — "Splitwise" minimal finance app.
-   Palette: slate navy + amber primary (trust/finance profile from ui-ux-pro-max).
-   Font: IBM Plex Sans (headings + body). All colors oklch. */
+/* Design tokens — self-hosted Splitwise.
+   Palette: slate navy + amber primary (trust/finance profile). Font: IBM Plex Sans.
+   All colors oklch, each defined once with light-dark(): the active scheme comes
+   from `color-scheme`, which follows the OS unless <html data-theme> pins it. */
 
 :root {
+  color-scheme: light dark;
   --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
 
-  /* light */
-  --bg: oklch(0.984 0.003 247);          /* slate-50 */
-  --fg: oklch(0.208 0.042 265);          /* slate-900 */
-  --card: oklch(1 0 0);                  /* white */
-  --card-fg: oklch(0.208 0.042 265);
-  --muted: oklch(0.968 0.007 247);       /* slate-100 */
-  --muted-fg: oklch(0.554 0.046 257);    /* slate-500 */
-  --border: oklch(0.929 0.013 255);      /* slate-200 */
-  --primary: oklch(0.784 0.17 70);       /* amber-500 */
+  /* surfaces: bg (page) < card (raised) < muted (inset / hover) */
+  --bg: light-dark(oklch(0.975 0.004 247), oklch(0.17 0.03 265));
+  --fg: light-dark(oklch(0.208 0.042 265), oklch(0.968 0.007 247));
+  --card: light-dark(oklch(1 0 0), oklch(0.225 0.032 264));
+  --card-fg: var(--fg);
+  --muted: light-dark(oklch(0.955 0.008 247), oklch(0.285 0.035 264));
+  --muted-fg: light-dark(oklch(0.52 0.042 257), oklch(0.72 0.03 256));
+  --border: light-dark(oklch(0.922 0.013 255), oklch(0.32 0.038 260));
+
+  /* brand */
+  --primary: light-dark(oklch(0.784 0.17 70), oklch(0.828 0.164 75));
   --primary-fg: oklch(0.208 0.042 265);
-  --accent: oklch(0.606 0.229 292);      /* violet-500 */
+  --primary-soft: light-dark(oklch(0.96 0.05 85), oklch(0.32 0.07 70));
+  --primary-soft-fg: light-dark(oklch(0.48 0.12 60), oklch(0.88 0.12 80));
+  --hero: light-dark(oklch(0.24 0.045 265), oklch(0.27 0.045 265));
+  --hero-fg: oklch(0.984 0.003 247);
+  --accent: light-dark(oklch(0.606 0.229 292), oklch(0.68 0.2 292));
   --accent-fg: oklch(0.984 0.003 247);
-  --destructive: oklch(0.637 0.237 25);  /* red-500 */
+  --ring: var(--primary);
+
+  /* money semantics: owed = someone owes you (green), owe = you owe (orange-red) */
+  --positive: light-dark(oklch(0.56 0.14 155), oklch(0.74 0.15 158));
+  --positive-soft: light-dark(oklch(0.95 0.045 160), oklch(0.3 0.06 160));
+  --negative: light-dark(oklch(0.6 0.19 40), oklch(0.74 0.15 45));
+  --negative-soft: light-dark(oklch(0.95 0.04 50), oklch(0.31 0.06 45));
+  --destructive: light-dark(oklch(0.58 0.22 25), oklch(0.68 0.2 25));
   --destructive-fg: oklch(0.984 0.003 247);
-  --positive: oklch(0.6 0.15 155);       /* green-500 */
-  --negative: oklch(0.637 0.237 25);
-  --ring: oklch(0.784 0.17 70);
+
+  /* single-series chart marks: amber stepped into the validated lightness band
+     (>= 3:1 against the card surface in both schemes) */
+  --chart-1: light-dark(oklch(0.66 0.16 62), oklch(0.75 0.15 70));
+
+  --shadow-sm: 0 1px 2px oklch(0.2 0.04 265 / 0.06), 0 1px 1px oklch(0.2 0.04 265 / 0.04);
+  --shadow-md: 0 8px 24px -6px oklch(0.2 0.04 265 / 0.16), 0 2px 6px oklch(0.2 0.04 265 / 0.06);
+  --shadow-lg: 0 24px 48px -12px oklch(0.15 0.04 265 / 0.35);
 
   /* avatar palette (hashed by name) */
-  --avatar-1: oklch(0.65 0.15 260); /* blue */
-  --avatar-2: oklch(0.6 0.15 155);  /* green */
-  --avatar-3: oklch(0.6 0.2 300);   /* purple */
-  --avatar-4: oklch(0.62 0.19 25);  /* red */
-  --avatar-5: oklch(0.72 0.14 70);  /* amber */
-  --avatar-6: oklch(0.63 0.19 340); /* pink */
+  --avatar-1: light-dark(oklch(0.62 0.15 260), oklch(0.66 0.15 260)); /* blue */
+  --avatar-2: light-dark(oklch(0.6 0.14 160), oklch(0.66 0.14 160));  /* green */
+  --avatar-3: light-dark(oklch(0.58 0.19 300), oklch(0.66 0.18 300)); /* purple */
+  --avatar-4: light-dark(oklch(0.62 0.19 25), oklch(0.68 0.18 25));   /* red */
+  --avatar-5: light-dark(oklch(0.7 0.15 65), oklch(0.76 0.14 70));    /* amber */
+  --avatar-6: light-dark(oklch(0.6 0.19 345), oklch(0.68 0.18 345));  /* pink */
+  --avatar-7: light-dark(oklch(0.6 0.12 200), oklch(0.68 0.12 200));  /* teal */
+  --avatar-8: light-dark(oklch(0.55 0.16 280), oklch(0.65 0.15 280)); /* indigo */
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: oklch(0.208 0.042 265);        /* slate-900 navy */
-    --fg: oklch(0.984 0.003 247);
-    --card: oklch(0.265 0.03 264);       /* slate-800-ish */
-    --card-fg: oklch(0.984 0.003 247);
-    --muted: oklch(0.31 0.036 264);
-    --muted-fg: oklch(0.7 0.03 256);     /* slate-400 */
-    --border: oklch(0.372 0.044 257);    /* slate-600 */
-    --primary: oklch(0.828 0.164 75);    /* amber-400, brighter on dark */
-    --primary-fg: oklch(0.208 0.042 265);
-    --accent: oklch(0.65 0.22 292);
-    --accent-fg: oklch(0.984 0.003 247);
-    --destructive: oklch(0.68 0.2 25);
-    --destructive-fg: oklch(0.208 0.042 265);
-    --positive: oklch(0.68 0.16 155);
-    --negative: oklch(0.68 0.2 25);
-    --ring: oklch(0.828 0.164 75);
-
-    /* avatar palette (hashed by name) */
-    --avatar-1: oklch(0.65 0.15 260);
-    --avatar-2: oklch(0.68 0.15 155);
-    --avatar-3: oklch(0.68 0.2 300);
-    --avatar-4: oklch(0.68 0.19 25);
-    --avatar-5: oklch(0.82 0.14 70);
-    --avatar-6: oklch(0.68 0.19 340);
-  }
-}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }

@@ -21,16 +21,18 @@ Preferences and conventions for working on this repo (self-hosted Splitwise: Fas
 - **Money is integer minor units (`amount_minor`) end to end. Never floats.** Largest-remainder splitting, rates stored at expense creation time.
 - Auth: cookie sessions (token_urlsafe, SHA-256 hashed, 30d TTL, HttpOnly SameSite=Lax). argon2 password hashing.
 - Frontend: React 19 + Vite + TS, TanStack Query, react-router, Tailwind v4, Recharts. No MUI/Ant/Radix — the web platform is the component library: native `<dialog>`, popover API, `appearance: base-select` menus, `@starting-style` animations.
-- Design tokens: oklch CSS custom properties in `src/tokens.css` (amber primary, slate navy, light+dark via `prefers-color-scheme`). Fonts: IBM Plex Sans. No new palette or component-library additions.
+- Design tokens: oklch CSS custom properties in `src/tokens.css` (amber primary, slate navy). Each token is defined once with `light-dark()`; the scheme follows the OS unless `<html data-theme>` pins it (`src/theme.ts`). Money colors are semantic: `positive` = owed to you, `negative` = you owe. Fonts: IBM Plex Sans. No new palette or component-library additions.
 
 ## UI conventions (established, keep consistent)
 
 - Borderless "hero" inputs: big amount field with inline borderless selects beside it; per-member split inputs are borderless with a bottom border, right-aligned tabular numbers, unit label beside.
 - Pill segmented controls for mode/tab switching (centered, fit-content).
 - Member pickers are toggle chips with distinct per-user avatar colors (name-hash → `--avatar-1..6`).
-- All dialogs are bottom sheets on mobile (≤40rem), centered cards on desktop, with `env(safe-area-inset-bottom)` padding.
-- Every small dialog/menu uses the shared `menu-select` / `dialog-sheet` / chip classes from `src/index.css` — extend those, don't inline ad-hoc styles.
-- Mobile touch targets ≥44px; buttons never wrap labels (`whitespace-nowrap`).
+- Every modal is `components/Dialog` (`dialog.sheet`): bottom sheet with a grab handle on mobile (≤40rem), centered card on desktop; primary actions go in its `footer` prop (pinned, safe-area padded).
+- Shared classes live in `src/index.css` — `menu-select`, `chipless` (+ `aria-pressed` / `.is-on`), `scroll-x`, `switch`, `skeleton` — extend those, don't inline ad-hoc styles.
+- Single-column `grid`s default to `minmax(0,1fr)` (index.css) so inputs and horizontal scrollers can't push past the screen edge; give multi-column grids explicit `grid-cols-*`.
+- Confirmations are toasts (`useToast`), with an Undo action for destructive changes that can be reversed.
+- Mobile touch targets ≥44px; buttons never wrap labels (`whitespace-nowrap`). `Button` defaults to `type="button"`.
 - Icons come from `src/components/icons.tsx` (inline SVG, currentColor) — never text glyphs or emoji in action buttons.
 
 ## Gotchas (don't re-learn these)

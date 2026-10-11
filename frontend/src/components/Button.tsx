@@ -1,30 +1,34 @@
 import type { ButtonHTMLAttributes } from "react";
 
 type Props = ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "primary" | "secondary" | "ghost" | "danger";
-  /** "icon" = square 2.5rem touch target, no padding. */
-  size?: "md" | "icon";
+  variant?: "primary" | "secondary" | "ghost" | "danger" | "soft" | "hero";
+  /** sm = compact toolbar, md = default (44px touch target), lg = full-width CTA,
+   *  icon = square 2.5rem, icon-sm = square 2rem. */
+  size?: "sm" | "md" | "lg" | "icon" | "icon-sm";
 };
 
 const styles: Record<NonNullable<Props["variant"]>, string> = {
-  primary:
-    "bg-primary text-primary-fg hover:opacity-90 font-medium",
-  secondary:
-    "bg-card text-fg border border-border hover:bg-muted",
-  ghost: "text-fg hover:bg-muted",
-  danger: "bg-destructive text-destructive-fg hover:opacity-90",
+  primary: "bg-primary text-primary-fg font-semibold shadow-card hover:brightness-[1.04] active:brightness-95",
+  secondary: "bg-card text-fg border border-border font-medium hover:bg-muted",
+  ghost: "text-fg font-medium hover:bg-muted",
+  soft: "bg-primary-soft text-primary-soft-fg font-semibold hover:brightness-[0.98]",
+  danger: "bg-destructive text-destructive-fg font-semibold hover:brightness-105",
+  hero: "bg-hero-fg/12 text-hero-fg font-medium hover:bg-hero-fg/20",
 };
 
-const sizes = {
-  md: "h-10 px-4",
+export const buttonSizes = {
+  sm: "h-9 px-3.5 text-sm",
+  md: "h-11 px-5",
+  lg: "h-12 px-6 text-[1.0625rem]",
   icon: "h-10 w-10 p-0",
+  "icon-sm": "h-8 w-8 p-0",
 };
 
-export function Button({ variant = "primary", size = "md", className = "", ...rest }: Props) {
-  return (
-    <button
-      className={`inline-flex cursor-pointer items-center justify-center gap-2 whitespace-nowrap transition-[background-color,opacity] duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 ${sizes[size]} ${styles[variant]} ${className}`}
-      {...rest}
-    />
-  );
+/** Shared classes so links (<a>, <Link>) can look like buttons. */
+export function buttonClass(variant: NonNullable<Props["variant"]> = "primary", size: NonNullable<Props["size"]> = "md") {
+  return `inline-flex cursor-pointer select-none items-center justify-center gap-2 whitespace-nowrap rounded-full transition-[background-color,filter,opacity,transform] duration-150 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-45 ${buttonSizes[size]} ${styles[variant]}`;
+}
+
+export function Button({ variant = "primary", size = "md", className = "", type = "button", ...rest }: Props) {
+  return <button type={type} className={`${buttonClass(variant, size)} ${className}`} {...rest} />;
 }

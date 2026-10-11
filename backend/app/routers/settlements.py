@@ -57,6 +57,7 @@ async def create_settlement(
         date=dt.date.today(),
     )
     db.add(settlement)
+    await db.flush()  # assign settlement.id before it's logged
     await log_activity(db, group.id, user.id, "settlement_recorded", target_id=settlement.id)
     await db.commit()
     await db.refresh(settlement)

@@ -6,6 +6,14 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from app.models import Settlement, User
 
+# password_hash for a member invited by email who hasn't registered yet —
+# not a valid argon2 hash, so no password can ever verify against it
+PENDING_HASH = "!pending"
+
+
+def is_pending(user: User) -> bool:
+    return user.password_hash == PENDING_HASH
+
 
 class UserCreate(BaseModel):
     email: EmailStr
@@ -42,11 +50,14 @@ class UserOut(BaseModel):
     name: str
     upi_id: str | None = None
     has_upi_qr: bool = False
+    # invited by email but hasn't registered yet (can't log in)
+    pending: bool = False
 
 
 def user_out(user: User) -> UserOut:
     out = UserOut.model_validate(user)
     out.has_upi_qr = bool(user.upi_qr_path)
+    out.pending = is_pending(user)
     return out
 
 
@@ -64,6 +75,12 @@ class GroupOut(BaseModel):
     created_by: int
     invite_code: str
     member_count: int = 0
+    simplify_debts: bool = True
+
+
+class GroupUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    simplify_debts: bool | None = None
 
 
 class MemberOut(UserOut):
@@ -76,11 +93,14 @@ class GroupDetail(GroupOut):
 
 class MemberAdd(BaseModel):
     email: EmailStr
+    # set = invite: an unknown email becomes a pending member with this name
+    name: str | None = Field(default=None, min_length=1, max_length=255)
 
 
 class SplitInput(BaseModel):
     user_id: int
-    mode: Literal["equal", "amounts", "percent", "shares"]
+    # itemized: value = that person's items; the rest of the total is split equally
+    mode: Literal["equal", "amounts", "percent", "shares", "itemized"]
     value: float | None = None
 
 
@@ -97,6 +117,7 @@ class ExpenseCreate(BaseModel):
     splits: list[SplitInput] = Field(min_length=1)
     date: Date | None = None
     category: str | None = None
+    notes: str | None = Field(default=None, max_length=2000)
     recurring: RecurringInput | None = None
 
 
@@ -120,6 +141,8 @@ class ExpenseOut(BaseModel):
     splits: list[SplitOut]
     recurring_rule_id: int | None = None
     receipt_path: str | None = None
+    notes: str | None = None
+    created_at: datetime | None = None
 
 
 class SettlementCreate(BaseModel):
@@ -166,7 +189,10 @@ class CommentCreate(BaseModel):
 
 
 class CommentOut(BaseModel):
+    model_config = {"from_attributes": True}
+
     id: int
     user_id: int
     body: str
     created_at: datetime
+    updated_at: datetime | None = None

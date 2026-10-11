@@ -11,115 +11,144 @@
   --color-border: var(--border);
   --color-primary: var(--primary);
   --color-primary-fg: var(--primary-fg);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-soft-fg: var(--primary-soft-fg);
+  --color-hero: var(--hero);
+  --color-hero-fg: var(--hero-fg);
   --color-accent: var(--accent);
   --color-accent-fg: var(--accent-fg);
   --color-destructive: var(--destructive);
   --color-destructive-fg: var(--destructive-fg);
   --color-positive: var(--positive);
+  --color-positive-soft: var(--positive-soft);
   --color-negative: var(--negative);
+  --color-negative-soft: var(--negative-soft);
+  /* legacy alias: older markup used text-success for "owed to you" */
+  --color-success: var(--positive);
   --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
 
   --font-sans: var(--font-sans);
-  --radius-card: 0.75rem;
+  --radius-card: 1rem;
+  --shadow-card: var(--shadow-sm);
+  --shadow-float: var(--shadow-md);
+  --shadow-sheet: var(--shadow-lg);
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+  text-size-adjust: 100%;
 }
 
 body {
   @apply bg-bg text-fg font-sans antialiased;
+  font-feature-settings: "tnum" 0;
+}
+
+/* Money and counters line up in columns */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@layer base {
+  /* layered so `focus-visible:outline-none` utilities can opt out */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: var(--primary-soft);
+  }
+
+  /* Single-column grids (stacked layouts) shrink to their container instead of
+     growing to a child's min-content — an <input> or a horizontal scroller would
+     otherwise push the column past the screen edge on phones. */
+  .grid:not([class*="grid-cols"]) {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 ::backdrop {
-  background: oklch(0 0 0 / 50%);
+  background: oklch(0.15 0.03 265 / 55%);
 }
 
-@keyframes slide-in {
-  from { transform: translateX(100%); }
-}
+/* ---------------------------------------------------------------- dialogs */
 
-/* Guided settle-all: fade/slide each step in as it mounts (keyed on index). */
-@keyframes step-in {
-  from { opacity: 0; transform: translateX(0.75rem); }
-}
-.settle-step { animation: step-in 0.2s ease-out; }
-@media (prefers-reduced-motion: reduce) {
-  .settle-step { animation: none; }
-}
-
-/* Expense modal: centered dialog on desktop, bottom sheet on small screens.
-   Entry/exit animation via @starting-style + allow-discrete (no JS); browsers
+/* Every <dialog> from components/Dialog: centered card on desktop, bottom sheet
+   on phones. Entry/exit via @starting-style + allow-discrete (no JS); browsers
    without support just show/hide instantly. */
-dialog.expense-modal {
-  width: min(30rem, calc(100vw - 2rem));
-  max-height: min(44rem, calc(100dvh - 2rem));
+dialog.sheet {
+  width: min(var(--sheet-w, 28rem), calc(100vw - 2rem));
+  max-height: min(48rem, calc(100dvh - 3rem));
   opacity: 0;
-  transform: scale(0.96);
+  transform: translateY(0.5rem) scale(0.98);
   transition:
-    opacity 0.2s ease-out,
-    transform 0.2s ease-out,
-    display 0.2s allow-discrete,
-    overlay 0.2s allow-discrete;
+    opacity 0.22s ease-out,
+    transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
+    display 0.22s allow-discrete,
+    overlay 0.22s allow-discrete;
 }
-dialog.expense-modal[open] {
+dialog.sheet[open] {
   opacity: 1;
   transform: none;
   @starting-style {
     opacity: 0;
-    transform: scale(0.96);
+    transform: translateY(0.5rem) scale(0.98);
   }
 }
-dialog.expense-modal::backdrop {
-  background: oklch(0 0 0 / 50%);
+dialog.sheet::backdrop {
+  background: oklch(0.15 0.03 265 / 55%);
+  backdrop-filter: blur(2px);
   transition:
-    display 0.2s allow-discrete,
-    overlay 0.2s allow-discrete,
-    background-color 0.2s ease-out;
+    display 0.22s allow-discrete,
+    overlay 0.22s allow-discrete,
+    background-color 0.22s ease-out;
 }
-dialog.expense-modal[open]::backdrop {
+dialog.sheet[open]::backdrop {
   @starting-style {
     background: oklch(0 0 0 / 0%);
   }
 }
+.sheet-handle {
+  display: none;
+}
 @media (max-width: 40rem) {
-  dialog.expense-modal {
+  dialog.sheet {
     width: 100vw;
-    max-height: 92dvh;
+    max-width: 100vw;
+    max-height: 94dvh;
     margin: auto 0 0; /* pin to bottom */
-    padding-bottom: env(safe-area-inset-bottom);
-    border-radius: var(--radius-card) var(--radius-card) 0 0;
+    border-radius: 1.5rem 1.5rem 0 0;
     transform: translateY(100%);
     overscroll-behavior: contain;
   }
-  dialog.expense-modal[open] {
+  dialog.sheet[open] {
     @starting-style {
       transform: translateY(100%);
     }
   }
+  .sheet-handle {
+    display: block;
+    width: 2.5rem;
+    height: 0.3rem;
+    border-radius: 999px;
+    background: var(--border);
+    margin: 0.5rem auto 0;
+  }
+  .sheet-footer {
+    padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+  }
 }
 @media (prefers-reduced-motion: reduce) {
-  dialog.expense-modal,
-  dialog.expense-modal::backdrop {
-    transition-duration: 0.1s;
-  }
-  dialog.expense-modal {
-    transform: none;
-  }
-  dialog.expense-modal[open] {
-    @starting-style {
-      transform: none;
-    }
+  dialog.sheet,
+  dialog.sheet::backdrop {
+    transition-duration: 0.01s;
   }
 }
 
-/* Hero amount input: hide number spinners */
-.amount-input::-webkit-inner-spin-button,
-.amount-input::-webkit-outer-spin-button {
-  appearance: none;
-  margin: 0;
-}
-.amount-input {
-  appearance: textfield;
-}
+/* ------------------------------------------------------------ number inputs */
 
-/* hide spinners on all numeric expense inputs (amounts, percent, shares) */
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
   appearance: none;
@@ -129,6 +158,8 @@ input[type="number"] {
   appearance: textfield;
   -moz-appearance: textfield;
 }
+
+/* ------------------------------------------------------------ menu <select> */
 
 /* Customizable <select> (Chrome/Edge 135+): styled menu matching the app tokens.
    Firefox/Safari degrade to the native dropdown with the trigger styles below. */
@@ -143,7 +174,7 @@ input[type="number"] {
   cursor: pointer;
   border: 0;
   background: transparent;
-  border-radius: 0.5rem;
+  border-radius: 0.625rem;
   padding: 0.25rem 0.5rem;
   font-weight: 500;
   color: var(--fg);
@@ -157,9 +188,9 @@ input[type="number"] {
   background: var(--card);
   color: var(--fg);
   border: 1px solid var(--border);
-  border-radius: 0.75rem;
+  border-radius: 0.875rem;
   padding: 0.25rem;
-  box-shadow: 0 8px 24px oklch(0 0 0 / 0.15);
+  box-shadow: var(--shadow-md);
 }
 .menu-select::picker-icon {
   color: var(--muted-fg);
@@ -167,8 +198,8 @@ input[type="number"] {
 }
 .menu-select option {
   cursor: pointer;
-  border-radius: 0.5rem;
-  padding: 0.375rem 0.625rem;
+  border-radius: 0.625rem;
+  padding: 0.5rem 0.75rem;
   color: var(--fg);
 }
 .menu-select option:hover,
@@ -179,17 +210,135 @@ input[type="number"] {
   color: var(--primary);
 }
 
-/* every small dialog becomes a bottom sheet on phones (add-member, settle-up, etc.) */
-@media (max-width: 40rem) {
-  dialog.dialog-sheet {
-    width: 100vw;
-    max-width: 100vw;
-    max-height: 88dvh;
-    margin: auto 0 0;
-    padding-bottom: env(safe-area-inset-bottom);
-    border-radius: var(--radius-card) var(--radius-card) 0 0;
+/* -------------------------------------------------------------------- chips */
+
+/* Ghost chip: icon + label buttons in footers and toolbars ("Receipt", "Repeat") */
+.chipless {
+  display: inline-flex;
+  height: 2.25rem;
+  cursor: pointer;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  padding: 0 0.875rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--fg);
+  white-space: nowrap;
+  transition: background-color 0.15s;
+}
+.chipless:hover {
+  background: var(--muted);
+}
+.chipless[aria-pressed="true"],
+.chipless.is-on {
+  border-color: transparent;
+  background: var(--primary-soft);
+  color: var(--primary-soft-fg);
+}
+
+/* Horizontal scrollers (action chips, category picker) bleed to the screen edge */
+.scroll-x {
+  display: flex;
+  overflow-x: auto;
+  scrollbar-width: none;
+  scroll-snap-type: x proximity;
+  overscroll-behavior-x: contain;
+}
+.scroll-x::-webkit-scrollbar {
+  display: none;
+}
+.scroll-x > * {
+  scroll-snap-align: start;
+}
+
+/* ------------------------------------------------------------------- switch */
+
+input[type="checkbox"].switch {
+  appearance: none;
+  position: relative;
+  width: 2.75rem;
+  height: 1.625rem;
+  flex-shrink: 0;
+  cursor: pointer;
+  border-radius: 999px;
+  background: var(--border);
+  transition: background-color 0.2s;
+}
+input[type="checkbox"].switch::after {
+  content: "";
+  position: absolute;
+  top: 0.1875rem;
+  left: 0.1875rem;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 999px;
+  background: white;
+  box-shadow: 0 1px 3px oklch(0 0 0 / 0.25);
+  transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+input[type="checkbox"].switch:checked {
+  background: var(--positive);
+}
+input[type="checkbox"].switch:checked::after {
+  transform: translateX(1.125rem);
+}
+input[type="checkbox"].switch:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* --------------------------------------------------------------- skeletons */
+
+.skeleton {
+  border-radius: 0.5rem;
+  background: linear-gradient(90deg, var(--muted) 0%, var(--border) 50%, var(--muted) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+@keyframes shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+
+/* ------------------------------------------------------------ toasts, steps */
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(0.75rem) scale(0.98); }
+}
+.toast {
+  animation: toast-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Guided settle-all: fade/slide each step in as it mounts (keyed on index). */
+@keyframes step-in {
+  from { opacity: 0; transform: translateX(0.75rem); }
+}
+.settle-step { animation: step-in 0.2s ease-out; }
+
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(0.375rem); }
+}
+.rise-in { animation: rise-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .settle-step,
+  .rise-in,
+  .toast,
+  .skeleton {
+    animation: none;
   }
-  dialog.dialog-sheet::backdrop {
-    background: oklch(0 0 0 / 50%);
+}
+
+/* Pressable surfaces get a subtle tap feedback on touch devices */
+@media (hover: none) {
+  .pressable:active {
+    background: var(--muted);
   }
+}
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
 }

@@ -38,13 +38,13 @@ async def materialize_due(db: AsyncSession) -> int:
         template = (
             await db.scalars(
                 select(Expense)
-                .where(Expense.recurring_rule_id == rule.id)
+                .where(Expense.recurring_rule_id == rule.id, Expense.deleted_at.is_(None))
                 .order_by(Expense.date.desc(), Expense.id.desc())
                 .limit(1)
             )
         ).first()
         if template is None:
-            continue  # ponytail: no template yet (rule just created, expense not linked) — skip
+            continue  # ponytail: no live template (just created, or every instance deleted) — skip
         expense = Expense(
             group_id=template.group_id,
             created_by=template.created_by,

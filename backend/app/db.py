@@ -54,9 +54,11 @@ async def init() -> None:
         await conn.run_sync(_add_missing_columns)
         await conn.execute(text("PRAGMA journal_mode=WAL"))
         # stamp head so a later `alembic upgrade head` doesn't re-run migrations
-        # that the self-heal already applied (duplicate-column). Raw INSERT
-        # instead of alembic.command.stamp — env.py uses asyncio.run, which
-        # can't run inside the lifespan loop.
+        # that the self-heal already applied (duplicate-column). Re-stamped on
+        # every boot: after create_all + self-heal the schema matches head even
+        # on a DB stamped at an older revision. Raw SQL instead of
+        # alembic.command.stamp — env.py uses asyncio.run, which can't run
+        # inside the lifespan loop.
         head = _alembic_head()
         if head:
             await conn.execute(
@@ -65,12 +67,9 @@ async def init() -> None:
                     "(version_num VARCHAR(32) NOT NULL)"
                 )
             )
+            await conn.execute(text("DELETE FROM alembic_version"))
             await conn.execute(
-                text(
-                    "INSERT INTO alembic_version (version_num) "
-                    "SELECT :head WHERE NOT EXISTS "
-                    "(SELECT 1 FROM alembic_version)"
-                ),
+                text("INSERT INTO alembic_version (version_num) VALUES (:head)"),
                 {"head": head},
             )
 

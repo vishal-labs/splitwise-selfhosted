@@ -1,249 +1,236 @@
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
-import { Link } from "react-router";
-import { api, createGroup, getGroupDebts, joinGroup, useGroups, type Group } from "../api";
+import { Link, useNavigate } from "react-router";
+import { createGroup, joinGroup, useFriends, useGroups, type Group } from "../api";
 import { useMe } from "../App";
-import { Avatar } from "../components/Avatar";
+import { groupNets, overallTotals } from "../balance";
+import { GroupAvatar } from "../components/Avatar";
+import { BalanceHero } from "../components/BalanceHero";
 import { Button } from "../components/Button";
 import { Dialog } from "../components/Dialog";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorState } from "../components/ErrorState";
-import { Input } from "../components/Input";
+import { ChevronRightIcon, GroupsIcon, LinkIcon, PlusIcon, QrIcon } from "../components/icons";
+import { Field, FormError, Input, inputClass } from "../components/Input";
+import { PageHeader } from "../components/PageHeader";
 import { PaymentForm } from "../components/PaymentForm";
-import { formatMinor } from "../format";
+import { ListSkeleton } from "../components/Skeleton";
+import { CURRENCIES, firstName, formatMinor } from "../format";
 
-/** Your net balance in one group: sum of debts where you're the payee minus payer. */
-function useNetBalance(group: Group, myId: number | undefined) {
-  return useQuery({
-    queryKey: ["debts", group.id],
-    queryFn: () => api<{ from: number; to: number; amount: number }[]>(`/groups/${group.id}/debts`),
-    enabled: myId !== undefined,
-    select: (debts) =>
-      debts.reduce(
-        (net, d) => net + (d.to === myId ? d.amount : d.from === myId ? -d.amount : 0),
-        0,
-      ),
-  });
-}
-
-/** Aggregate "owed to you" / "you owe" across all groups. Shares the ["debts", id] cache with GroupCard. */
-function useNetTotals(groups: Group[] | undefined, myId: number) {
-  const queries = useQueries({
-    queries: (groups ?? []).map((g) => ({
-      queryKey: ["debts", g.id],
-      queryFn: () => getGroupDebts(g.id),
-      enabled: myId > 0,
-    })),
-  });
-  // ponytail: sums assume one currency across groups; split per-currency if that ever varies
-  return queries.reduce(
-    (acc, q) => {
-      const net = (q.data ?? []).reduce(
-        (n, d) => n + (d.to === myId ? d.amount : d.from === myId ? -d.amount : 0),
-        0,
-      );
-      return { owed: acc.owed + Math.max(net, 0), owe: acc.owe + Math.max(-net, 0) };
-    },
-    { owed: 0, owe: 0 },
-  );
-}
-
-function GroupCard({ group, myId }: { group: Group; myId: number }) {
-  const { data: net, isError, refetch } = useNetBalance(group, myId);
+function GroupRow({ group, net, loading }: { group: Group; net: number | undefined; loading: boolean }) {
   return (
-    <Link
-      to={`/groups/${group.id}`}
-      className="flex items-center gap-3 rounded-card border border-border bg-card p-4 transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-    >
-      <Avatar name={group.name} size={40} />
-      <div className="min-w-0 flex-1">
-        <p className="truncate font-medium">{group.name}</p>
-        <p className="text-sm text-muted-fg">
-          {group.member_count} {group.member_count === 1 ? "member" : "members"}
-        </p>
-      </div>
-      {isError ? (
-        <span className="shrink-0 text-sm text-destructive">
-          Balance unavailable{" "}
-          <button
-            type="button"
-            className="underline hover:opacity-80"
-            onClick={(e) => {
-              e.preventDefault();
-              void refetch();
-            }}
-          >
-            Retry
-          </button>
-        </span>
-      ) : (
-        net !== undefined &&
-        net !== 0 && (
-          <span className={`text-sm font-medium ${net > 0 ? "text-success" : "text-destructive"}`}>
-            {net > 0 ? "+" : "−"}
-            {formatMinor(Math.abs(net), group.currency)}
-          </span>
-        )
-      )}
-    </Link>
+    <li>
+      <Link
+        to={`/groups/${group.id}`}
+        className="pressable flex items-center gap-3.5 rounded-2xl px-3 py-3 transition-colors hover:bg-muted"
+      >
+        <GroupAvatar name={group.name} size={48} />
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-semibold">{group.name}</p>
+          <p className="text-sm text-muted-fg">
+            {group.member_count} {group.member_count === 1 ? "member" : "members"} · {group.currency}
+          </p>
+        </div>
+        <div className="shrink-0 text-right">
+          {loading ? (
+            <span className="skeleton block h-8 w-20" />
+          ) : net ? (
+            <>
+              <p className={`text-xs font-medium ${net > 0 ? "text-positive" : "text-negative"}`}>
+                {net > 0 ? "you are owed" : "you owe"}
+              </p>
+              <p className={`tabular font-semibold ${net > 0 ? "text-positive" : "text-negative"}`}>
+                {formatMinor(Math.abs(net), group.currency)}
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-muted-fg">settled up</p>
+          )}
+        </div>
+        <ChevronRightIcon size={18} className="shrink-0 text-muted-fg/60 max-sm:hidden" />
+      </Link>
+    </li>
   );
 }
 
 export default function Dashboard() {
   const { data: me } = useMe();
+  const navigate = useNavigate();
   const { data: groups, isPending, isError, refetch } = useGroups();
-  const { owed, owe } = useNetTotals(groups, me?.id ?? 0);
+  const friends = useFriends();
   const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
-  const [joinOpen, setJoinOpen] = useState(false);
-  const [paymentOpen, setPaymentOpen] = useState(false);
+  const [open, setOpen] = useState<"create" | "join" | "upi" | null>(null);
   const [error, setError] = useState("");
-  const [joinError, setJoinError] = useState("");
+
+  const nets = friends.data ? groupNets(friends.data) : new Map<number, number>();
+  const { owed, owe } = overallTotals(friends.data ?? []);
+  const close = () => {
+    setOpen(null);
+    setError("");
+  };
 
   const create = useMutation({
     mutationFn: (body: { name: string; currency: string }) => createGroup(body),
-    onSuccess: () => {
+    onSuccess: (g) => {
       queryClient.invalidateQueries({ queryKey: ["groups"] });
-      setOpen(false);
+      close();
+      navigate(`/groups/${g.id}`);
     },
     onError: (e) => setError(e instanceof Error ? e.message : "Something went wrong"),
   });
 
   const join = useMutation({
     mutationFn: (code: string) => joinGroup(code),
-    onSuccess: () => {
+    onSuccess: (g) => {
       queryClient.invalidateQueries({ queryKey: ["groups"] });
-      setJoinOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["friends"] });
+      close();
+      navigate(`/groups/${g.id}`);
     },
-    onError: (e) => setJoinError(e instanceof Error ? e.message : "Something went wrong"),
+    onError: (e) => setError(e instanceof Error ? e.message : "Something went wrong"),
   });
 
-  function onSubmit(e: FormEvent<HTMLFormElement>) {
+  function onCreate(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
     const data = new FormData(e.currentTarget);
     create.mutate({
       name: (data.get("name") as string).trim(),
-      currency: ((data.get("currency") as string) || "INR").trim().toUpperCase(),
+      currency: (data.get("currency") as string) || "INR",
     });
   }
 
   function onJoin(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setJoinError("");
-    const data = new FormData(e.currentTarget);
-    join.mutate(((data.get("code") as string) || "").trim());
+    setError("");
+    const raw = ((new FormData(e.currentTarget).get("code") as string) || "").trim();
+    // accept a pasted invite link as well as the bare code
+    join.mutate(raw.split("/join/").pop()!.replace(/\W/g, ""));
   }
 
-  if (isPending) return <p className="text-muted-fg">Loading…</p>;
-  if (isError)
-    return (
-      <div>
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold">Groups</h1>
-        </div>
-        <div className="mt-4">
-          <ErrorState
-            description="Couldn't load your groups."
-            action={() => void refetch()}
-          />
-        </div>
-      </div>
-    );
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
   return (
-    <div>
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Groups</h1>
-        <div className="flex gap-2">
-          <Button onClick={() => setJoinOpen(true)} variant="ghost">
-            Join
-          </Button>
-          <Button onClick={() => setOpen(true)}>New group</Button>
+    <div className="rise-in">
+      <PageHeader
+        title={
+          <>
+            <span className="block text-sm font-medium tracking-normal text-muted-fg">{greeting}</span>
+            {me ? firstName(me.name) : "Groups"}
+          </>
+        }
+        actions={
+          <>
+            <Button variant="secondary" size="sm" onClick={() => setOpen("join")}>
+              <LinkIcon size={16} />
+              <span className="max-sm:hidden">Join group</span>
+              <span className="sm:hidden">Join</span>
+            </Button>
+            <Button size="sm" onClick={() => setOpen("create")} className="max-sm:hidden">
+              <PlusIcon size={16} strokeWidth={2.5} />
+              New group
+            </Button>
+          </>
+        }
+      />
+
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
+        <div className="grid gap-6 lg:order-2 lg:sticky lg:top-8">
+          <BalanceHero owed={owed} owe={owe} loading={friends.isPending}>
+            {me && !me.upi_id && !me.has_upi_qr && (
+              <button
+                type="button"
+                onClick={() => setOpen("upi")}
+                className="flex w-full cursor-pointer items-center gap-3 rounded-2xl bg-primary px-3.5 py-3 text-left text-primary-fg transition hover:brightness-[1.04]"
+              >
+                <QrIcon size={20} />
+                <span className="flex-1 text-sm font-semibold">Add your UPI ID to get paid in one tap</span>
+                <ChevronRightIcon size={18} />
+              </button>
+            )}
+          </BalanceHero>
         </div>
+
+        <section aria-label="Groups" className="lg:order-1">
+          <div className="mb-2 flex items-center justify-between px-1">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-fg">Your groups</h2>
+            <button
+              type="button"
+              onClick={() => setOpen("create")}
+              className="inline-flex h-9 cursor-pointer items-center gap-1 rounded-full px-3 text-sm font-semibold text-primary-soft-fg hover:bg-primary-soft sm:hidden"
+            >
+              <PlusIcon size={16} strokeWidth={2.5} /> New
+            </button>
+          </div>
+          {isPending ? (
+            <ListSkeleton rows={3} tile="rounded-2xl" />
+          ) : isError ? (
+            <ErrorState description="Couldn't load your groups." action={() => void refetch()} />
+          ) : groups.length === 0 ? (
+            <EmptyState
+              icon={GroupsIcon}
+              title="No groups yet"
+              description="Create a group for your flat, a trip or a dinner club — then add expenses as they happen."
+              action={<Button onClick={() => setOpen("create")}>Create your first group</Button>}
+            />
+          ) : (
+            <ul className="-mx-3 grid grid-cols-[minmax(0,1fr)] gap-0.5">
+              {groups.map((g) => (
+                <GroupRow key={g.id} group={g} net={nets.get(g.id)} loading={friends.isPending} />
+              ))}
+            </ul>
+          )}
+        </section>
       </div>
 
-      {(owed > 0 || owe > 0) && (
-        <p className="mt-2 text-sm font-medium">
-          {owed > 0 && (
-            <span className="text-success">
-              You're owed {formatMinor(owed, groups?.[0]?.currency ?? "INR")}
-            </span>
-          )}
-          {owed > 0 && owe > 0 && <span className="text-muted-fg"> · </span>}
-          {owe > 0 && (
-            <span className="text-destructive">
-              You owe {formatMinor(owe, groups?.[0]?.currency ?? "INR")}
-            </span>
-          )}
-        </p>
-      )}
-
-      {me && !me.upi_id && !me.has_upi_qr && (
-        <div className="mt-4 flex items-center justify-between gap-3 rounded-card border border-border bg-card p-3">
-          <p className="text-sm text-muted-fg">Get paid faster — add your UPI ID.</p>
-          <Button variant="secondary" onClick={() => setPaymentOpen(true)}>
-            Add UPI
+      <Dialog
+        open={open === "create"}
+        onClose={close}
+        title="New group"
+        footer={
+          <Button type="submit" form="create-group" size="lg" className="w-full" disabled={create.isPending}>
+            {create.isPending ? "Creating…" : "Create group"}
           </Button>
-        </div>
-      )}
-
-      {groups && groups.length > 0 ? (
-        <div className="mt-4 grid gap-2">
-          {groups.map((g) => (
-            <GroupCard key={g.id} group={g} myId={me!.id} />
-          ))}
-        </div>
-      ) : (
-        <div className="mt-4">
-          <EmptyState
-            title="No groups yet"
-            description="Create a group to start splitting expenses with friends."
-            action={<Button onClick={() => setOpen(true)}>Create your first group</Button>}
-          />
-        </div>
-      )}
-
-      <Dialog open={open} onClose={() => setOpen(false)} title="Create group">
-        <form onSubmit={onSubmit} className="grid gap-4">
-          <label className="grid gap-1.5 text-sm">
-            Name
-            <Input name="name" required maxLength={255} placeholder="Trip to Goa" />
-          </label>
-          <label className="grid gap-1.5 text-sm">
-            Currency
-            <Input name="currency" defaultValue="INR" required pattern="[A-Za-z]{3}" title="3-letter currency code" />
-          </label>
-          {error && (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          )}
-          <Button type="submit" disabled={create.isPending}>
-            {create.isPending ? "Creating…" : "Create"}
-          </Button>
+        }
+      >
+        <form id="create-group" onSubmit={onCreate} className="grid gap-4 pt-1">
+          <Field label="Group name">
+            <Input name="name" required maxLength={255} placeholder="Goa trip, Flat 302…" autoFocus />
+          </Field>
+          <Field label="Currency" hint="Balances in this group are kept in this currency.">
+            <select name="currency" defaultValue="INR" className={`${inputClass} cursor-pointer`}>
+              {CURRENCIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <FormError>{error}</FormError>
         </form>
       </Dialog>
 
-      <Dialog open={joinOpen} onClose={() => setJoinOpen(false)} title="Join group">
-        <form onSubmit={onJoin} className="grid gap-4">
-          <label className="grid gap-1.5 text-sm">
-            Invite code
-            <Input name="code" required maxLength={16} placeholder="e.g. 3fa1b2c4" />
-          </label>
-          {joinError && (
-            <p role="alert" className="text-sm text-destructive">
-              {joinError}
-            </p>
-          )}
-          <Button type="submit" disabled={join.isPending}>
+      <Dialog
+        open={open === "join"}
+        onClose={close}
+        title="Join a group"
+        footer={
+          <Button type="submit" form="join-group" size="lg" className="w-full" disabled={join.isPending}>
             {join.isPending ? "Joining…" : "Join"}
           </Button>
+        }
+      >
+        <form id="join-group" onSubmit={onJoin} className="grid gap-4 pt-1">
+          <Field label="Invite code or link" hint="Ask a member to share it from the group's settings.">
+            <Input name="code" required autoComplete="off" autoCapitalize="off" placeholder="e.g. 3fa1b2" autoFocus />
+          </Field>
+          <FormError>{error}</FormError>
         </form>
       </Dialog>
 
       {me && (
-        <Dialog open={paymentOpen} onClose={() => setPaymentOpen(false)} title="Payment details">
+        <Dialog open={open === "upi"} onClose={close} title="Payment details">
           <PaymentForm me={me} />
         </Dialog>
       )}

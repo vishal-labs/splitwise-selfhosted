@@ -3,7 +3,12 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router'
 import App from './App.tsx'
+import { ToastProvider } from './components/Toast.tsx'
+import { applyTheme } from './theme.ts'
 import './index.css'
+
+applyTheme()
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => applyTheme())
 
 const queryClient = new QueryClient({
   queryCache: new QueryCache({ onError: (e, q) => console.error("query failed:", q.queryKey, e) }),
@@ -14,7 +19,9 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <App />
+        <ToastProvider>
+          <App />
+        </ToastProvider>
       </BrowserRouter>
     </QueryClientProvider>
   </StrictMode>,

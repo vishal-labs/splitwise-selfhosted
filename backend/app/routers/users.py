@@ -20,7 +20,15 @@ from app.auth import (
 )
 from app.config import settings
 from app.models import Membership, User
-from app.schemas import PasswordChange, UserCreate, UserLogin, UserOut, UserUpdate, user_out
+from app.schemas import (
+    PasswordChange,
+    UserCreate,
+    UserLogin,
+    UserOut,
+    UserUpdate,
+    is_pending,
+    user_out,
+)
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
@@ -31,11 +39,17 @@ MAX_SIZE = 5 * 1024 * 1024
 
 @router.post("/register", response_model=UserOut)
 async def register(payload: UserCreate, response: Response, db: AsyncSession = Depends(get_db)):
-    existing = await db.scalar(select(User).where(User.email == payload.email))
-    if existing is not None:
+    user = await db.scalar(select(User).where(User.email == payload.email))
+    if user is not None and not is_pending(user):
         raise HTTPException(status.HTTP_409_CONFLICT, "Email already registered")
-    user = User(email=payload.email, name=payload.name, password_hash=pwd.hash(payload.password))
-    db.add(user)
+    if user is None:
+        user = User(email=payload.email, name=payload.name, password_hash=pwd.hash(payload.password))
+        db.add(user)
+    else:
+        # claim the account a friend invited by email: same id, so their
+        # groups and balances carry over
+        user.name = payload.name
+        user.password_hash = pwd.hash(payload.password)
     await db.commit()
     await db.refresh(user)
     await create_session(response, user.id)

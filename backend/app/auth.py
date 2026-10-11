@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
 from argon2 import PasswordHasher
-from argon2.exceptions import VerifyMismatchError
+from argon2.exceptions import InvalidHashError, VerifyMismatchError
 from fastapi import Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -64,5 +64,5 @@ def verify_password(user: User, password: str) -> bool:
     try:
         pwd.verify(user.password_hash, password)
         return True
-    except VerifyMismatchError:
-        return False
+    except (VerifyMismatchError, InvalidHashError):
+        return False  # InvalidHash: invited-but-unregistered accounts (PENDING_HASH)

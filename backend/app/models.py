@@ -32,6 +32,8 @@ class Group(Base):
     currency: Mapped[str] = mapped_column(String(3))
     created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
     invite_code: Mapped[str] = mapped_column(String(16), unique=True)
+    # None = on (pre-existing groups default to simplified debts)
+    simplify_debts: Mapped[bool | None] = mapped_column()
 
 
 class Membership(Base):
@@ -58,7 +60,9 @@ class Expense(Base):
     category: Mapped[str | None] = mapped_column(String(64))
     recurring_rule_id: Mapped[int | None] = mapped_column(ForeignKey("recurring_rules.id"))
     receipt_path: Mapped[str | None] = mapped_column(String(255))
+    notes: Mapped[str | None] = mapped_column(String(2000))
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime)
 
 
 class ExpenseSplit(Base):
@@ -90,6 +94,7 @@ class Comment(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     body: Mapped[str] = mapped_column(String(2000))
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime)  # set on edit
 
 
 class RecurringRule(Base):

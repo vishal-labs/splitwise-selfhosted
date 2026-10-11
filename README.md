@@ -4,13 +4,18 @@ Self-hostable Splitwise clone: FastAPI + SQLite (WAL) backend, React 19 + Vite f
 
 ## Features
 
-- Groups with members, invite codes, and per-group base currency
-- Expenses with equal / amounts / percent / shares splits (integer-cents math, no float drift)
+- Groups with members, invite links/codes, and per-group base currency
+- Invite people who haven't signed up yet (name + email) — they claim their place by registering with that email
+- Expenses with equal / amounts / percent / shares splits (integer-cents math, no float drift), notes, receipts, comments
+- Category auto-suggested from the description; deleted expenses can be undone (soft delete + restore)
 - Multi-currency entry with daily ECB conversion rates
 - Recurring expenses (weekly / monthly / yearly)
-- Net balances + simplified debts ("settle up" suggestions)
-- Analytics (monthly trends, category breakdown), CSV export
-- Receipt attachments, expense comments, activity feed
+- Net balances with a per-group "simplify debts" switch (fewest transfers vs. person-to-person)
+- Friends view: your balance with each person across every group
+- Settle up in either direction ("I paid" / "I received"), UPI QR + deep links, payment proof uploads
+- Settle-up reminders shared via the phone's share sheet / WhatsApp, with your UPI pay link
+- Global activity feed, per-group totals (monthly trends, categories, your share), CSV export
+- Mobile-first PWA UI (bottom tabs, sheets), desktop sidebar layout, light/dark/system theme
 - Cookie-session auth (argon2 password hashing)
 
 ## Quickstart

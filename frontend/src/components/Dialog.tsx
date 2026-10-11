@@ -5,16 +5,21 @@ import { XIcon } from "./icons";
 type Props = {
   open: boolean;
   onClose: () => void;
-  title: string;
+  title: ReactNode;
   children: ReactNode;
-  /** Extra classes for the <dialog> element (size/layout overrides). */
-  className?: string;
+  /** Pinned below the scrolling body (primary actions). */
+  footer?: ReactNode;
+  /** Desktop width, e.g. "32rem". Phones always get a full-width bottom sheet. */
+  width?: string;
   /** Classes for the content wrapper; replaces the default padding. */
   bodyClassName?: string;
+  /** Hide the title row (custom headers). The title stays as the accessible name. */
+  bare?: boolean;
 };
 
-/** Modal built on the native <dialog> element (focus trap + Escape for free). */
-export function Dialog({ open, onClose, title, children, className, bodyClassName }: Props) {
+/** Modal on the native <dialog> (focus trap + Escape for free). Centered card on
+ *  desktop, bottom sheet with a grab handle on phones (see dialog.sheet in index.css). */
+export function Dialog({ open, onClose, title, children, footer, width, bodyClassName, bare }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -28,19 +33,27 @@ export function Dialog({ open, onClose, title, children, className, bodyClassNam
     <dialog
       ref={ref}
       onClose={onClose}
+      aria-label={typeof title === "string" ? title : undefined}
       onClick={(e) => {
         // light dismiss: click landed on the backdrop (the dialog element itself)
         if (e.target === ref.current) ref.current.close();
       }}
-      className={`dialog-sheet m-auto w-[min(28rem,calc(100vw-2rem))] rounded-card bg-card p-0 text-fg shadow-xl backdrop:bg-black/50 ${className ?? ""}`}
+      style={width ? ({ "--sheet-w": width } as React.CSSProperties) : undefined}
+      className="sheet m-auto flex-col overflow-hidden rounded-[1.25rem] bg-card p-0 text-fg shadow-sheet open:flex"
     >
-      <div className="flex items-center justify-between border-b border-border px-5 py-4 max-sm:px-4 max-sm:py-3">
-        <h2 className="font-semibold">{title}</h2>
-        <Button variant="ghost" aria-label="Close" onClick={() => ref.current?.close()}>
-          <XIcon size={18} />
-        </Button>
-      </div>
-      <div className={bodyClassName ?? "p-5 max-sm:p-4"}>{children}</div>
+      <div className="sheet-handle shrink-0" aria-hidden="true" />
+      {!bare && (
+        <div className="flex shrink-0 items-center justify-between gap-2 py-3 pl-5 pr-3 max-sm:pl-4">
+          <h2 className="min-w-0 truncate text-[1.0625rem] font-semibold">{title}</h2>
+          <Button variant="ghost" size="icon" aria-label="Close" onClick={() => ref.current?.close()} className="text-muted-fg">
+            <XIcon size={20} />
+          </Button>
+        </div>
+      )}
+      <div className={`min-h-0 flex-1 overflow-y-auto ${bodyClassName ?? "px-5 pb-5 max-sm:px-4"}`}>{children}</div>
+      {footer && (
+        <div className="sheet-footer shrink-0 border-t border-border bg-card px-5 py-3 max-sm:px-4">{footer}</div>
+      )}
     </dialog>
   );
 }

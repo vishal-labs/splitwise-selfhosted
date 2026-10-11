@@ -2,8 +2,10 @@
   "name": "Splitwise",
   "short_name": "Splitwise",
   "display": "standalone",
-  "background_color": "#f8fafc",
-  "theme_color": "#f59e0b",
+  "background_color": "#f6f8fb",
+  "start_url": "/",
+  "description": "Split shared expenses with friends, flatmates and trips.",
+  "theme_color": "#f6f8fb",
   "icons": [
     { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
     { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
